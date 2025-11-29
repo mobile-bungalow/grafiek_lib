@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["grafiek_engine", "grafiek_egui", "schema_derive"]
+
+[workspace.dependencies]
+petgraph = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+semver = { version = "1.0", features = ["serde"] }
+log = "0.4"
+derive_more = { version = "1.0", features = ["from"] }

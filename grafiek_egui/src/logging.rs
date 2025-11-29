@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
+use env_logger::Builder;
 use log::Log;
 
 pub struct CombineLogger<L1, L2>(pub L1, pub L2);
@@ -19,16 +20,11 @@ impl<L1: Log, L2: Log> Log for CombineLogger<L1, L2> {
     }
 }
 
-pub fn init() -> Result<()> {
-    let env_log = env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Debug)
-        .build();
+pub fn init(level: log::LevelFilter) -> Result<()> {
+    let env_log = Builder::from_default_env().filter_level(level).build();
+    let egui = egui_logger::Builder::default().max_level(level).build();
 
-    let egui = egui_logger::Builder::default()
-        .max_level(log::LevelFilter::Debug)
-        .build();
-
-    log::set_max_level(log::LevelFilter::Debug);
+    log::set_max_level(level);
     log::set_boxed_logger(Box::new(CombineLogger(env_log, egui)))?;
 
     Ok(())

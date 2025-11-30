@@ -1,8 +1,6 @@
-use grafiek_engine::ops::{
-    math::ArithmeticOp,
-    system::{InputOp, OutputOp},
-};
-use grafiek_engine::{Engine, Value};
+use grafiek_engine::Engine;
 
 #[test]
-fn test_add_operation() {}
+fn init() {
+    Engine::init().unwrap();
+}

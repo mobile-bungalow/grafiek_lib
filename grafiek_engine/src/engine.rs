@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ops;
-use crate::traits::{OpPath, OperationFactory, OperationFactoryEntry};
+use crate::traits::{OperationFactory, OperationFactoryEntry};
 use crate::{error::Error, node::Node};
 use petgraph::prelude::*;
 
@@ -41,11 +41,14 @@ impl Engine {
     }
 
     pub fn register_op<T: OperationFactory>(&mut self) -> Result<(), Error> {
-        let lib = self.registry.entry(T::PATH.library()).or_default();
-        if lib.contains_key(T::PATH.operator()) {
-            return Err(Error::DuplicateOperationType(T::PATH));
+        let lib = self.registry.entry(T::PATH.library).or_default();
+        if lib.contains_key(T::PATH.operator) {
+            return Err(Error::DuplicateOperationType(
+                T::PATH.library,
+                T::PATH.operator,
+            ));
         }
-        lib.insert(T::PATH.operator(), OperationFactoryEntry::new::<T>());
+        lib.insert(T::PATH.operator, OperationFactoryEntry::new::<T>());
         Ok(())
     }
 

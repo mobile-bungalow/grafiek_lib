@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use crate::traits::OpPath;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
@@ -9,8 +7,8 @@ pub enum Error {
     #[error("Unknown operation type: {0}")]
     UnknownOperationType(String),
 
-    #[error("Duplicate operation type: {0}")]
-    DuplicateOperationType(OpPath),
+    #[error("Duplicate operation type: {0}/{1}")]
+    DuplicateOperationType(&'static str, &'static str),
 
     #[error("Node not found: {0}")]
     NodeNotFound(String),

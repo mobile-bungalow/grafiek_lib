@@ -46,30 +46,16 @@ pub trait InputSchema: Schema {}
 
 pub trait ConfigSchema: Schema {}
 
-/// Unique identifier for an operation type, formatted as `library/operator`.
+/// Unique identifier for an operation type.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct OpPath {
-    library: &'static str,
-    operator: &'static str,
+    pub library: &'static str,
+    pub operator: &'static str,
 }
 
 impl OpPath {
     pub const fn new(library: &'static str, operator: &'static str) -> Self {
         Self { library, operator }
-    }
-
-    pub fn library(&self) -> &'static str {
-        self.library
-    }
-
-    pub fn operator(&self) -> &'static str {
-        self.operator
-    }
-}
-
-impl std::fmt::Display for OpPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.library, self.operator)
     }
 }
 

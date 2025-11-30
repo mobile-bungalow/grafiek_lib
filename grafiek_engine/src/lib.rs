@@ -8,8 +8,9 @@ pub mod error;
 pub mod ops;
 pub mod traits;
 
-pub use consts::*;
+// TODO: when we have an execution context
+// textures, and important values these will be exposed
+//pub use consts::*;
 pub use engine::*;
 pub use registry::*;
-pub use traits::OpPath;
 pub use value::*;

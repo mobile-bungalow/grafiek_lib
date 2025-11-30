@@ -32,14 +32,17 @@ impl Engine {
         Ok(out)
     }
 
+    /// List all operators qualified names
     pub fn iter_operators(&self) -> impl Iterator<Item = &QualifiedName> {
         self.op_register.keys()
     }
 
+    /// List all Operator Categories - for display
     pub fn iter_categories(&self) -> impl Iterator<Item = OpCategory> {
         OpCategory::iter()
     }
 
+    /// List all operators registered under a given category
     pub fn operators_by_category(
         &self,
         category: OpCategory,
@@ -50,6 +53,7 @@ impl Engine {
             .map(|(name, _)| name)
     }
 
+    /// Registers and op such that it can be instantiated by name later
     pub fn register_op<T: OperationFactory>(&mut self) -> Result<(), Error> {
         if self.op_register.contains_key(&T::qualified_name()) {
             return Err(Error::DuplicateOperationType(T::qualified_name()));

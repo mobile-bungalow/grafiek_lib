@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Mesa Vulkan drivers (llvmpipe)
+      - name: Install llvmpipe
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - uses: Swatinem/rust-cache@v2
@@ -24,6 +24,9 @@ jobs:
         run: cargo build --all-targets
 
       - name: Test
-        env:
-          WGPU_BACKEND: vulkan
+        #env:
+        # TODO: at one point we should run the tests for
+        # the engine under llvmpipe and have some fixture snapshotting
+        # based on an image diff library
+        #  WGPU_BACKEND: vulkan
         run: cargo test

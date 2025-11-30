@@ -8,4 +8,3 @@ serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 petgraph.workspace = true
-strum = { version = "0.26", features = ["derive"] }

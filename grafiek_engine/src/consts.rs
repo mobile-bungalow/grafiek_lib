@@ -1,16 +1,4 @@
 use crate::TextureHandle;
-use strum::EnumIter;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-pub enum OpCategory {
-    Arithmetic,
-    Scripting,
-    Graphics,
-    Vector,
-    Engine,
-    Logic,
-    Color,
-}
 
 impl TextureHandle {
     /// 1x1 black pixel texture (default/fallback)

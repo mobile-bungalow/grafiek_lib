@@ -1,4 +1,4 @@
-use crate::{Metadata, OpCategory, SignatureRegister, Value, error::Result};
+use crate::{Metadata, SignatureRegister, Value, error::Result};
 
 /// pass a type that implements this to Grafiek at start time.
 /// The engine will make all the proper callbacks into this object to ensure
@@ -46,30 +46,38 @@ pub trait InputSchema: Schema {}
 
 pub trait ConfigSchema: Schema {}
 
+/// Unique identifier for an operation type, formatted as `library/operator`.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct QualifiedName {
-    operator_name: &'static str,
-    library_name: &'static str,
+pub struct OpPath {
+    library: &'static str,
+    operator: &'static str,
 }
 
-impl std::fmt::Display for QualifiedName {
+impl OpPath {
+    pub const fn new(library: &'static str, operator: &'static str) -> Self {
+        Self { library, operator }
+    }
+
+    pub fn library(&self) -> &'static str {
+        self.library
+    }
+
+    pub fn operator(&self) -> &'static str {
+        self.operator
+    }
+}
+
+impl std::fmt::Display for OpPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} - {}", self.library_name, self.operator_name)
+        write!(f, "{}/{}", self.library, self.operator)
     }
 }
 
 /// Trait for operations that can be registered and constructed from documents
 pub trait OperationFactory: 'static {
-    const OPERATION_NAME: &'static str;
-    const LIBRARY_NAME: &'static str;
-    const CATEGORY: OpCategory;
-
-    fn qualified_name() -> QualifiedName {
-        QualifiedName {
-            operator_name: Self::OPERATION_NAME,
-            library_name: Self::LIBRARY_NAME,
-        }
-    }
+    const PATH: OpPath;
+    /// Human-readable label for the operation (can be duplicated across operations)
+    const LABEL: &'static str;
 
     // TODO: we need to deal with migration logic at one point
     // Old version of nodes saved to disk will desync if the config
@@ -86,16 +94,16 @@ pub trait OperationFactory: 'static {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct OperationFactoryTable {
+pub(crate) struct OperationFactoryEntry {
     pub build: fn() -> Result<Box<dyn Operation>>,
-    pub category: OpCategory,
+    pub label: &'static str,
 }
 
-impl OperationFactoryTable {
+impl OperationFactoryEntry {
     pub fn new<T: OperationFactory>() -> Self {
         Self {
             build: || T::build(),
-            category: T::CATEGORY,
+            label: T::LABEL,
         }
     }
 }

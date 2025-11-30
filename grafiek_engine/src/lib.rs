@@ -11,4 +11,5 @@ pub mod traits;
 pub use consts::*;
 pub use engine::*;
 pub use registry::*;
+pub use traits::OpPath;
 pub use value::*;

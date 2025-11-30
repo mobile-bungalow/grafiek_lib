@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use strum::IntoEnumIterator;
-
 use crate::ops;
-use crate::traits::{OperationFactory, OperationFactoryTable};
-use crate::{OpCategory, error::Error, node::Node, traits::QualifiedName};
+use crate::traits::{OpPath, OperationFactory, OperationFactoryEntry};
+use crate::{error::Error, node::Node};
 use petgraph::prelude::*;
 
 pub struct ExecutionContext {}
@@ -15,52 +13,56 @@ pub struct Edge {
     pub sink_slot: usize,
 }
 
-#[derive(Debug, Clone)]
+type OpRegistry = HashMap<&'static str, HashMap<&'static str, OperationFactoryEntry>>;
+
+#[derive(Debug, Clone, Default)]
 pub struct Engine {
     graph: StableDiGraph<Node, Edge>,
-    op_register: HashMap<QualifiedName, OperationFactoryTable>,
+    registry: OpRegistry,
 }
 
 impl Engine {
     pub fn init() -> Result<Self, Error> {
-        let mut out = Self {
-            graph: StableDiGraph::new(),
-            op_register: HashMap::new(),
-        };
+        let mut out = Self::default();
         log::info!("loading grafiek::core operators");
         out.register_op::<ops::Input>()?;
         Ok(out)
     }
 
-    /// List all operators qualified names
-    pub fn iter_operators(&self) -> impl Iterator<Item = &QualifiedName> {
-        self.op_register.keys()
+    pub fn node_categories(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.registry.keys().copied()
     }
 
-    /// List all Operator Categories - for display
-    pub fn iter_categories(&self) -> impl Iterator<Item = OpCategory> {
-        OpCategory::iter()
+    pub fn iter_category(&self, category: &str) -> impl Iterator<Item = &'static str> + '_ {
+        self.registry
+            .get(category)
+            .into_iter()
+            .flat_map(|m| m.keys().copied())
     }
 
-    /// List all operators registered under a given category
-    pub fn operators_by_category(
-        &self,
-        category: OpCategory,
-    ) -> impl Iterator<Item = &QualifiedName> {
-        self.op_register
-            .iter()
-            .filter(move |(_, factory)| factory.category == category)
-            .map(|(name, _)| name)
-    }
-
-    /// Registers and op such that it can be instantiated by name later
     pub fn register_op<T: OperationFactory>(&mut self) -> Result<(), Error> {
-        if self.op_register.contains_key(&T::qualified_name()) {
-            return Err(Error::DuplicateOperationType(T::qualified_name()));
+        let lib = self.registry.entry(T::PATH.library()).or_default();
+        if lib.contains_key(T::PATH.operator()) {
+            return Err(Error::DuplicateOperationType(T::PATH));
         }
-        self.op_register
-            .insert(T::qualified_name(), OperationFactoryTable::new::<T>());
-
+        lib.insert(T::PATH.operator(), OperationFactoryEntry::new::<T>());
         Ok(())
+    }
+
+    pub fn create_node(&mut self, library: &str, operator: &str) -> Result<NodeIndex, Error> {
+        let entry = self
+            .registry
+            .get(library)
+            .and_then(|lib| lib.get(operator))
+            .ok_or_else(|| Error::UnknownOperationType(format!("{}/{}", library, operator)))?;
+
+        todo!();
+        //let operation = (entry.build)()?;
+        //Node::new(operation);
+        //let out = self.graph.add_node(node);
+
+        //self.node_created();
+
+        //Ok(out)
     }
 }

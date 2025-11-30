@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::traits::QualifiedName;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
@@ -8,7 +10,7 @@ pub enum Error {
     UnknownOperationType(String),
 
     #[error("Duplicate operation type: {0}")]
-    DuplicateOperationType(String),
+    DuplicateOperationType(QualifiedName),
 
     #[error("Node not found: {0}")]
     NodeNotFound(String),

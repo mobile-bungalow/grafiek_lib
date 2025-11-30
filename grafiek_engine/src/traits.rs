@@ -1,7 +1,4 @@
-use crate::{
-    Metadata, OpCategory, SignatureRegister, Value,
-    error::{Error, Result},
-};
+use crate::{Metadata, OpCategory, SignatureRegister, Value, error::Result};
 
 /// pass a type that implements this to Grafiek at start time.
 /// The engine will make all the proper callbacks into this object to ensure
@@ -29,33 +26,76 @@ pub trait GrafiekObserver {
 }
 
 /// Lifecycle and execution logic for
-trait Operation {}
+pub trait Operation {}
 
-trait Schema: Default {
-    fn try_extract(values: &[()]) -> Result<Self>;
+/// Convenience trait for describing reflective schemas for nodes defined in rust.
+/// Allows for easy extraction of input and config and easy writing to output.
+pub trait Schema: Default {
+    fn try_extract(values: &[Value]) -> Result<Self>;
     fn try_write(&self, output: &mut [Value]) -> Result<()>;
     fn register(register: &mut SignatureRegister);
     fn metadata(field: &str) -> Metadata;
     fn fields() -> &'static [&'static str];
+    /// Number of fields
     fn len() -> usize;
 }
 
-trait Output: Schema {}
-trait Input: Schema {}
-trait Config: Schema {}
+pub trait OutputSchema: Schema {}
+
+pub trait InputSchema: Schema {}
+
+pub trait ConfigSchema: Schema {}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct QualifiedName {
+    operator_name: &'static str,
+    library_name: &'static str,
+}
+
+impl std::fmt::Display for QualifiedName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} - {}", self.library_name, self.operator_name)
+    }
+}
 
 /// Trait for operations that can be registered and constructed from documents
 pub trait OperationFactory: 'static {
-    type Config: serde::Serialize + serde::de::DeserializeOwned + Default;
+    const OPERATION_NAME: &'static str;
+    const LIBRARY_NAME: &'static str;
+    const CATEGORY: OpCategory;
 
-    fn operation_name() -> &'static str;
-    fn library() -> &'static str;
-    fn category() -> OpCategory;
-    fn version() -> u32;
+    fn qualified_name() -> QualifiedName {
+        QualifiedName {
+            operator_name: Self::OPERATION_NAME,
+            library_name: Self::LIBRARY_NAME,
+        }
+    }
 
-    fn create_boxed(config: Option<Self::Config>) -> Result<Box<dyn Operation>>;
+    // TODO: we need to deal with migration logic at one point
+    // Old version of nodes saved to disk will desync if the config
+    // or inputs desync.
+    //
+    // This means at one point the setup workflow will work like
+    // 1.) build vanilla with default config
+    // 2.) migrate disk config
+    // 3.) reconfigure node
+    // ... connect and validate
+    //fn migrate(config: &Record) -> Record;
 
-    fn create_default() -> Result<Box<dyn Operation>> {
-        Self::create_boxed(None)
+    fn build() -> Result<Box<dyn Operation>>;
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct OperationFactoryTable {
+    pub build: fn() -> Result<Box<dyn Operation>>,
+    pub category: OpCategory,
+}
+
+impl OperationFactoryTable {
+    pub fn new<T: OperationFactory>() -> Self {
+        Self {
+            build: || T::build(),
+            category: T::CATEGORY,
+        }
     }
 }

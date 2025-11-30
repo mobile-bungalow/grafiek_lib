@@ -1,6 +1,7 @@
 use crate::TextureHandle;
+use strum::EnumIter;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum OpCategory {
     Arithmetic,
     Scripting,

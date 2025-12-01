@@ -1,4 +1,6 @@
+use crate::ExecutionContext;
 use crate::error::Result;
+use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
 
 /// A visual note. Left up to the client to
@@ -8,7 +10,8 @@ pub struct Comment;
 impl Operation for Comment {}
 
 impl OperationFactory for Comment {
-    const PATH: OpPath = OpPath::new("core", "comment");
+    const LIBRARY: &'static str = "core";
+    const OPERATOR: &'static str = "comment";
     const LABEL: &'static str = "Comment";
 
     fn build() -> Result<Box<dyn Operation>> {

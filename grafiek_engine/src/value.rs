@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -162,5 +164,171 @@ impl fmt::Display for ValueType {
             ValueType::Texture => write!(f, "texture"),
             ValueType::Any => write!(f, "any"),
         }
+    }
+}
+
+/// A typesafe guard over a value that tracks mutations.
+/// On drop, sets a shared dirty flag if the value was modified and writes back to the Value.
+pub struct ValueGuard<'a, T>
+where
+    T: Clone + PartialEq,
+    Value: From<T>,
+{
+    value: T,
+    original: T,
+    slot: &'a mut Value,
+    dirty: &'a Cell<bool>,
+    pub metadata: &'a SlotMetadata,
+}
+
+impl<'a, T> ValueGuard<'a, T>
+where
+    T: Clone + PartialEq,
+    for<'b> &'b mut T: TryFrom<&'b mut Value, Error = ValueError>,
+    Value: From<T>,
+{
+    pub(crate) fn new(
+        slot: &'a mut Value,
+        dirty: &'a Cell<bool>,
+        metadata: &'a SlotMetadata,
+    ) -> Result<Self, ValueError> {
+        let value: T = {
+            let ref_mut: &mut T = (&mut *slot).try_into()?;
+            ref_mut.clone()
+        };
+        let original = value.clone();
+        Ok(Self {
+            value,
+            original,
+            slot,
+            dirty,
+            metadata,
+        })
+    }
+}
+
+impl<T> Deref for ValueGuard<'_, T>
+where
+    T: Clone + PartialEq,
+    Value: From<T>,
+{
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for ValueGuard<'_, T>
+where
+    T: Clone + PartialEq,
+    Value: From<T>,
+{
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+impl<T> Drop for ValueGuard<'_, T>
+where
+    T: Clone + PartialEq,
+    Value: From<T>,
+{
+    fn drop(&mut self) {
+        if self.value != self.original {
+            self.dirty.set(true);
+            *self.slot = Value::from(self.value.clone());
+        }
+    }
+}
+
+/// Read-only view into input values for [Operation::execute]
+pub struct Inputs<'a>(&'a [Value]);
+
+impl<'a> Inputs<'a> {
+    pub fn new(values: &'a [Value]) -> Self {
+        Self(values)
+    }
+
+    /// Get a typed reference to an input value
+    pub fn get<T>(&self, index: usize) -> Result<&T, ValueError>
+    where
+        for<'b> &'b T: TryFrom<&'b Value, Error = ValueError>,
+    {
+        self.0
+            .get(index)
+            .ok_or(ValueError::Index(index))?
+            .try_into()
+    }
+
+    /// Number of input slots
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get the raw Value at an index
+    pub fn raw(&self, index: usize) -> Option<&Value> {
+        self.0.get(index)
+    }
+
+    /// Iterate over raw values
+    pub fn iter(&self) -> impl Iterator<Item = &Value> {
+        self.0.iter()
+    }
+}
+
+/// Mutable view into output values for execute
+pub struct Outputs<'a>(&'a mut [Value]);
+
+impl<'a> Outputs<'a> {
+    pub fn new(values: &'a mut [Value]) -> Self {
+        Self(values)
+    }
+
+    /// Set an output value, checking that the type matches the slot's declared type
+    pub fn set<T>(&mut self, index: usize, val: T) -> Result<(), ValueError>
+    where
+        Value: From<T>,
+    {
+        let slot = self.0.get_mut(index).ok_or(ValueError::Index(index))?;
+
+        let new_val = Value::from(val);
+        if std::mem::discriminant(slot) != std::mem::discriminant(&new_val) {
+            return Err(ValueError::TypeMismatch {
+                wanted: format!("{:?}", slot.discriminant()),
+                found: format!("{:?}", new_val.discriminant()),
+            });
+        }
+        *slot = new_val;
+        Ok(())
+    }
+
+    /// Number of output slots
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get the raw Value at an index
+    pub fn raw(&self, index: usize) -> Option<&Value> {
+        self.0.get(index)
+    }
+
+    /// Get a mutable reference to the raw Value,
+    /// You really should try NOT to change the type of a value!
+    /// This is not anticipated for during graph calculation.
+    pub unsafe fn raw_mut(&mut self, index: usize) -> Option<&mut Value> {
+        self.0.get_mut(index)
+    }
+
+    /// Iterate over raw values
+    pub fn iter(&self) -> impl Iterator<Item = &Value> {
+        self.0.iter()
     }
 }

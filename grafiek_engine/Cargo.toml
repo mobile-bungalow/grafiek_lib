@@ -8,3 +8,7 @@ serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 petgraph.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+pollster.workspace = true

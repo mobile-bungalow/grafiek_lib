@@ -9,3 +9,7 @@ proc-macro = true
 [dependencies]
 syn = { version = "2", features = ["full", "parsing"] }
 quote = "1.0.42"
+
+[dev-dependencies]
+trybuild = "1.0"
+grafiek_engine = { path = "../grafiek_engine" }

@@ -10,3 +10,5 @@ thiserror = "2.0"
 semver = { version = "1.0", features = ["serde"] }
 log = "0.4"
 derive_more = { version = "1.0", features = ["from"] }
+wgpu = "27"
+pollster = "0.4"

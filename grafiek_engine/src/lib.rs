@@ -1,5 +1,7 @@
 mod consts;
+mod document;
 mod engine;
+mod history;
 mod node;
 mod registry;
 mod value;

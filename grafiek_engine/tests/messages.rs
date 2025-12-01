@@ -72,7 +72,6 @@ fn input_node_no_dirty_when_value_unchanged() {
     let input = engine.add_node(Box::new(Input)).unwrap();
     messages.clear();
 
-    // Edit but don't change the value (default is 0.0, set to 0.0)
     engine
         .edit_graph_input(input, |_slot, value| {
             if let ValueMut::F32(v) = value {

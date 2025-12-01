@@ -213,7 +213,8 @@ macro_rules! define_value_enum {
 pub struct TextureHandle(pub u32);
 
 /// A string wrapper that requires explicit acknowledgment of changes.
-/// T
+/// This is because it is inefficient to compare the string on every
+/// delta in immediate mode frontends.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct GrafiekString {
     inner: String,

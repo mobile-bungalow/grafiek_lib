@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{OpPath, Operation};
-use crate::value::{ValueError, ValueGuard};
-use crate::{SignatureRegistery, SlotMetadata, Value, ValueType};
+use crate::{SignatureRegistery, SlotMetadata, Value, ValueMut, ValueType};
 
 /// Engine provided unique ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,41 +97,16 @@ impl Node {
     }
 }
 
-/// Mutable access to a config or input slot with automatic dirty tracking
-pub struct SlotMut<'a> {
-    value: &'a mut Value,
-    metadata: &'a SlotMetadata,
-    dirty: &'a Cell<bool>,
-}
-
-impl<'a> SlotMut<'a> {
-    pub(crate) fn new(
-        value: &'a mut Value,
-        metadata: &'a SlotMetadata,
-        dirty: &'a Cell<bool>,
-    ) -> Self {
-        Self {
-            value,
-            metadata,
-            dirty,
-        }
+impl Node {
+    /// Get mutable access to an input value
+    pub fn input_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
+        self.dirty.set(true);
+        self.record.input_values.get_mut(index).map(Value::as_mut)
     }
 
-    pub fn value_type(&self) -> ValueType {
-        self.value.discriminant()
-    }
-
-    pub fn metadata(&self) -> &SlotMetadata {
-        self.metadata
-    }
-
-    /// Get a typed guard for this slot. Returns error if type doesn't match.
-    pub fn guard<T>(&mut self) -> Result<ValueGuard<'_, T>, ValueError>
-    where
-        T: Clone + PartialEq,
-        for<'b> &'b mut T: TryFrom<&'b mut Value, Error = ValueError>,
-        Value: From<T>,
-    {
-        ValueGuard::new(self.value, self.dirty, self.metadata)
+    /// Get mutable access to a config value
+    pub fn config_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
+        self.dirty.set(true);
+        self.record.config_values.get_mut(index).map(Value::as_mut)
     }
 }

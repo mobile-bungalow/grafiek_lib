@@ -9,6 +9,7 @@ thiserror.workspace = true
 log.workspace = true
 petgraph.workspace = true
 wgpu.workspace = true
+arrayvec = { version = "0.7.6", features = ["serde"] }
 
 [dev-dependencies]
 pollster.workspace = true

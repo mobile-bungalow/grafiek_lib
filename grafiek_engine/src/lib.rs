@@ -1,4 +1,3 @@
-mod consts;
 mod document;
 mod engine;
 mod history;

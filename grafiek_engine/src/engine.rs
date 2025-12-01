@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
+use crate::error::Error;
 use crate::history::{History, Message, Mutation};
 use crate::node::{Node, NodeId};
 use crate::ops;
-use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
-use crate::{error::Error, node::Node};
+use crate::traits::{OperationFactory, OperationFactoryEntry};
 use petgraph::prelude::*;
 use wgpu::{Device, Queue};
 
@@ -115,6 +115,27 @@ impl Engine {
 
         let operation = (entry.build)()?;
         self.add_node(operation)
+    }
+}
+
+// Runtime
+impl Engine {
+    /// Edit a graph input (InputOp output value) with automatic mutation tracking
+    pub fn edit_graph_input<F>(&mut self, index: NodeIndex, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(ValueMut),
+    {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or(|| Error::NodeNotFound(format!("Node not found at index - {index:?}")))?;
+
+        if node.op_type() != ops::InputOp::TYPE_NAME {
+            return Err(e);
+        }
+
+        node.override_output(index, 0, |_info, value| f(value));
+        Ok(())
     }
 }
 

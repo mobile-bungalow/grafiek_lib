@@ -1,31 +1,10 @@
 use crate::error::Result;
-use crate::registry::SignatureRegistery;
+use crate::registry::{SignatureRegistery, SlotMetadata};
 use crate::traits::{OpPath, Operation, OperationFactory};
-use crate::{ExecutionContext, TextureHandle};
+use crate::value::{Inputs, Outputs};
+use crate::{ExecutionContext, ValueType};
 
 pub struct Input;
-
-// TODO: derive schema
-//#[derive(Schema)]
-pub enum InputType {
-    Float,
-    Integer,
-    Texture,
-}
-
-//#[derive(Schema(Config))]
-pub struct Cfg {
-    //#[label("type")]
-    ty: InputType,
-}
-
-impl Default for Cfg {
-    fn default() -> Self {
-        Self {
-            ty: InputType::Float,
-        }
-    }
-}
 
 impl Operation for Input {
     fn is_stateful(&self) -> bool {
@@ -36,32 +15,30 @@ impl Operation for Input {
         <Self as OperationFactory>::op_path()
     }
 
-    fn setup(
-        &mut self,
-        _ctx: &mut ExecutionContext,
-        registry: &mut SignatureRegistery,
-    ) -> Result<()> {
-        registry.register_config::<Cfg>()?;
-        registry.push_output::<f32>("value").finish();
-        Ok(())
+    fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
+        // Input node stores a value and forwards it to its output
+        registry.add_input(
+            ValueType::F32,
+            SlotMetadata {
+                name: "value".to_string(),
+            },
+        );
+        registry.add_output(
+            ValueType::F32,
+            SlotMetadata {
+                name: "value".to_string(),
+            },
+        );
     }
 
-    fn configure(&mut self, config: Config, registry: &mut SignatureRegistry) -> Result<()> {
-        registry.clear();
-        let cfg = config.extract::<Cfg>()?;
-
-        match cfg.ty {
-            InputType::Float => {
-                registry.push_output::<f32>("value").finish()?;
-            }
-            InputType::Integer => {
-                registry.push_output::<i32>("value").finish()?;
-            }
-            InputType::Texture => {
-                registry.push_output::<TextureHandle>("value").finish()?;
-            }
-        }
-
+    fn execute(
+        &mut self,
+        _ctx: &mut ExecutionContext,
+        _inputs: Inputs,
+        _outputs: Outputs,
+    ) -> Result<()> {
+        // Forward input to output
+        // TODO: copy input[0] to output[0]
         Ok(())
     }
 }

@@ -1,7 +1,6 @@
 use arrayvec::ArrayVec;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 
 /// Maximum number of input/output slots per node
@@ -18,50 +17,75 @@ pub enum ValueError {
 
 macro_rules! define_value_enum {
     (
-        $(
-            $variant:ident : $ty:ty
-        ),* $(,)?
+        copy { $( $copy_variant:ident : $copy_ty:ty ),* $(,)? }
+        clone { $( $clone_variant:ident : $clone_ty:ty ),* $(,)? }
     ) => {
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub enum Value {
-            $(
-                $variant($ty),
-            )*
+            $( $copy_variant($copy_ty), )*
+            $( $clone_variant($clone_ty), )*
             Null(()),
         }
 
         #[derive(Debug, PartialEq)]
         pub enum ValueRef<'a> {
-            $(
-                $variant(&'a $ty),
-            )*
+            $( $copy_variant(&'a $copy_ty), )*
+            $( $clone_variant(&'a $clone_ty), )*
             Null(()),
         }
 
         #[derive(Debug, PartialEq)]
         pub enum ValueMut<'a> {
-            $(
-                $variant(&'a mut $ty),
-            )*
+            $( $copy_variant(&'a mut $copy_ty), )*
+            $( $clone_variant(&'a mut $clone_ty), )*
             Null(()),
+        }
+
+        /// Checkpoint for comparing value state without cloning expensive types.
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum ValueCheckpoint {
+            $( $copy_variant($copy_ty), )*
+            $( $clone_variant, )* // No data for clone types - use dirty flag
+            Null,
         }
 
         impl Value {
             pub fn as_ref(&self) -> ValueRef<'_> {
                 match self {
-                    $(
-                        Value::$variant(v) => ValueRef::$variant(v),
-                    )*
+                    $( Value::$copy_variant(v) => ValueRef::$copy_variant(v), )*
+                    $( Value::$clone_variant(v) => ValueRef::$clone_variant(v), )*
                     Value::Null(_) => ValueRef::Null(()),
                 }
             }
 
             pub fn as_mut(&mut self) -> ValueMut<'_> {
                 match self {
-                    $(
-                        Value::$variant(v) => ValueMut::$variant(v),
-                    )*
+                    $( Value::$copy_variant(v) => ValueMut::$copy_variant(v), )*
+                    $( Value::$clone_variant(v) => ValueMut::$clone_variant(v), )*
                     Value::Null(_) => ValueMut::Null(()),
+                }
+            }
+
+            /// Create a checkpoint for later comparison.
+            pub fn checkpoint(&self) -> ValueCheckpoint {
+                match self {
+                    $( Value::$copy_variant(v) => ValueCheckpoint::$copy_variant(*v), )*
+                    $( Value::$clone_variant(_) => ValueCheckpoint::$clone_variant, )*
+                    Value::Null(_) => ValueCheckpoint::Null,
+                }
+            }
+
+            /// Check if value changed since checkpoint, clearing dirty flags.
+            pub fn changed_since(&mut self, checkpoint: &ValueCheckpoint) -> bool {
+                match (self, checkpoint) {
+                    $( (Value::$copy_variant(v), ValueCheckpoint::$copy_variant(c)) => v != c, )*
+                    $( (Value::$clone_variant(v), ValueCheckpoint::$clone_variant) => {
+                        let dirty = v.is_dirty();
+                        v.clear_dirty();
+                        dirty
+                    }, )*
+                    (Value::Null(_), ValueCheckpoint::Null) => false,
+                    _ => true, // Type changed
                 }
             }
         }
@@ -69,81 +93,211 @@ macro_rules! define_value_enum {
         /// Defines the type of a given slot.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum ValueType {
-            $(
-                $variant,
-            )*
+            $( $copy_variant, )*
+            $( $clone_variant, )*
             Any,
         }
 
         impl Value {
             pub fn discriminant(&self) -> ValueType {
                 match self {
-                    $(
-                        Value::$variant(_) => ValueType::$variant,
-                    )*
+                    $( Value::$copy_variant(_) => ValueType::$copy_variant, )*
+                    $( Value::$clone_variant(_) => ValueType::$clone_variant, )*
                     Value::Null(_) => ValueType::Any,
                 }
             }
         }
 
+        impl ValueType {
+            /// Returns the default value for this type
+            pub fn default_value(&self) -> Value {
+                match self {
+                    $( ValueType::$copy_variant => Value::$copy_variant(<$copy_ty>::default()), )*
+                    $( ValueType::$clone_variant => Value::$clone_variant(<$clone_ty>::default()), )*
+                    ValueType::Any => Value::Null(()),
+                }
+            }
+        }
+
+        pub trait AsValueType {
+            fn value_type() -> ValueType;
+        }
+
+        // Impls for Copy types
         $(
-            impl From<$ty> for Value {
-                fn from(v: $ty) -> Self {
-                    Value::$variant(v)
+            impl From<$copy_ty> for Value {
+                fn from(v: $copy_ty) -> Self {
+                    Value::$copy_variant(v)
                 }
             }
 
-            impl AsValueType for $ty {
+            impl AsValueType for $copy_ty {
                 fn value_type() -> ValueType {
-                    ValueType::$variant
+                    ValueType::$copy_variant
                 }
             }
 
-            impl<'a> TryFrom<&'a mut Value> for &'a mut $ty {
+            impl<'a> TryFrom<&'a mut Value> for &'a mut $copy_ty {
                 type Error = ValueError;
                 fn try_from(v: &'a mut Value) -> Result<Self, Self::Error> {
-                    let Value::$variant(v) = v else {
+                    let Value::$copy_variant(v) = v else {
                         return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$ty>::value_type()),
+                            wanted: format!("{:?}", <$copy_ty>::value_type()),
                             found: format!("{:?}", v),
                         });
                     };
-
                     Ok(v)
                 }
             }
 
-            impl<'a> TryFrom<&'a Value> for &'a $ty {
+            impl<'a> TryFrom<&'a Value> for &'a $copy_ty {
                 type Error = ValueError;
                 fn try_from(v: &'a Value) -> Result<Self, Self::Error> {
-                    let Value::$variant(v) = v else {
+                    let Value::$copy_variant(v) = v else {
                         return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$ty>::value_type()),
+                            wanted: format!("{:?}", <$copy_ty>::value_type()),
                             found: format!("{:?}", v),
                         });
                     };
-
                     Ok(v)
                 }
             }
         )*
 
-    };
-}
+        // Impls for Clone types
+        $(
+            impl From<$clone_ty> for Value {
+                fn from(v: $clone_ty) -> Self {
+                    Value::$clone_variant(v)
+                }
+            }
 
-pub trait AsValueType {
-    fn value_type() -> ValueType;
+            impl AsValueType for $clone_ty {
+                fn value_type() -> ValueType {
+                    ValueType::$clone_variant
+                }
+            }
+
+            impl<'a> TryFrom<&'a mut Value> for &'a mut $clone_ty {
+                type Error = ValueError;
+                fn try_from(v: &'a mut Value) -> Result<Self, Self::Error> {
+                    let Value::$clone_variant(v) = v else {
+                        return Err(ValueError::TypeMismatch {
+                            wanted: format!("{:?}", <$clone_ty>::value_type()),
+                            found: format!("{:?}", v),
+                        });
+                    };
+                    Ok(v)
+                }
+            }
+
+            impl<'a> TryFrom<&'a Value> for &'a $clone_ty {
+                type Error = ValueError;
+                fn try_from(v: &'a Value) -> Result<Self, Self::Error> {
+                    let Value::$clone_variant(v) = v else {
+                        return Err(ValueError::TypeMismatch {
+                            wanted: format!("{:?}", <$clone_ty>::value_type()),
+                            found: format!("{:?}", v),
+                        });
+                    };
+                    Ok(v)
+                }
+            }
+        )*
+    };
 }
 
 /// Handle to a texture stored in the engine's texture pool.
 /// The actual texture data is reference-counted by the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TextureHandle(pub u32);
 
+/// A string wrapper that requires explicit acknowledgment of changes.
+/// T
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GrafiekString {
+    inner: String,
+    #[serde(skip)]
+    dirty: bool,
+}
+
+impl GrafiekString {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self {
+            inner: s.into(),
+            dirty: false,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Get mutable access to the string. Returns a guard that must be consumed.
+    pub fn edit(&mut self) -> (StringGuard<'_>, &mut String) {
+        let guard = StringGuard {
+            dirty: &mut self.dirty,
+        };
+        (guard, &mut self.inner)
+    }
+}
+
+impl From<String> for GrafiekString {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
+impl From<&str> for GrafiekString {
+    fn from(s: &str) -> Self {
+        Self::new(s)
+    }
+}
+
+/// Guard returned by `GrafiekString::edit()`. Must be consumed with `changed()` or `unchanged()`.
+///
+/// This is to prevent cloning every string multiple times and comparing per frame.
+#[must_use = "StringGuard must be consumed with .changed() or .unchanged()"]
+pub struct StringGuard<'a> {
+    dirty: &'a mut bool,
+}
+
+impl StringGuard<'_> {
+    /// Signal that the string was modified.
+    pub fn changed(self) {
+        *self.dirty = true;
+        std::mem::forget(self);
+    }
+
+    /// Signal that the string was not modified.
+    pub fn unchanged(self) {
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for StringGuard<'_> {
+    fn drop(&mut self) {
+        panic!("StringGuard must be consumed with .changed() or .unchanged()");
+    }
+}
+
 define_value_enum! {
-    I32: i32,
-    F32: f32,
-    Texture: TextureHandle,
+    copy {
+        I32: i32,
+        F32: f32,
+        Texture: TextureHandle,
+    }
+    clone {
+        String: GrafiekString,
+    }
 }
 
 impl ValueType {
@@ -189,6 +343,7 @@ impl fmt::Display for Value {
             Value::I32(v) => write!(f, "{}", v),
             Value::F32(v) => write!(f, "{:.3}", v),
             Value::Texture(h) => write!(f, "texture({})", h.0),
+            Value::String(s) => write!(f, "{}", s.as_str()),
             Value::Null(_) => write!(f, "null"),
         }
     }
@@ -201,6 +356,7 @@ impl fmt::Display for ValueType {
             ValueType::I32 => write!(f, "i32"),
             ValueType::F32 => write!(f, "f32"),
             ValueType::Texture => write!(f, "texture"),
+            ValueType::String => write!(f, "string"),
             ValueType::Any => write!(f, "any"),
         }
     }

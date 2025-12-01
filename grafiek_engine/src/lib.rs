@@ -1,9 +1,10 @@
 mod document;
 mod engine;
-mod history;
 mod node;
 mod registry;
 mod value;
+
+pub mod history;
 
 pub mod error;
 pub mod ops;

@@ -1,20 +1,20 @@
-use crate::ExecutionContext;
-use crate::error::Result;
-use crate::registry::SignatureRegistery;
-use crate::traits::{OpPath, Operation, OperationFactory};
-
-/// A visual note. Left up to the client to
-/// decide display logic.
-pub struct Comment;
-
-impl Operation for Comment {}
-
-impl OperationFactory for Comment {
-    const LIBRARY: &'static str = "core";
-    const OPERATOR: &'static str = "comment";
-    const LABEL: &'static str = "Comment";
-
-    fn build() -> Result<Box<dyn Operation>> {
-        Ok(Box::new(Comment))
-    }
-}
+// use crate::ExecutionContext;
+// use crate::error::Result;
+// use crate::registry::SignatureRegistery;
+// use crate::traits::{OpPath, Operation, OperationFactory};
+//
+// /// A visual note. Left up to the client to
+// /// decide display logic.
+// pub struct Comment;
+//
+// impl Operation for Comment {}
+//
+// impl OperationFactory for Comment {
+//     const LIBRARY: &'static str = "core";
+//     const OPERATOR: &'static str = "comment";
+//     const LABEL: &'static str = "Comment";
+//
+//     fn build() -> Result<Box<dyn Operation>> {
+//         Ok(Box::new(Comment))
+//     }
+// }

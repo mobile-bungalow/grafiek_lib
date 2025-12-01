@@ -40,7 +40,7 @@ pub fn setup_wgpu() -> (wgpu::Device, wgpu::Queue) {
             .expect("Failed to create device")
     });
 
-    device.on_uncaptured_error(Box::new(|e| match e {
+    device.on_uncaptured_error(std::sync::Arc::new(|e| match e {
         wgpu::Error::Internal {
             source,
             description,

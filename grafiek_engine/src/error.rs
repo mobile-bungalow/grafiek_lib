@@ -13,6 +13,12 @@ pub enum Error {
     #[error("Node not found: {0}")]
     NodeNotFound(String),
 
+    #[error("No port on node: {0}")]
+    NoPort(usize),
+
+    #[error("Node accessed while modifying graph input was not an instance of core/input.")]
+    NotInputNode,
+
     #[error("Invalid edge: from node {from} to node {to}")]
     InvalidEdge { from: usize, to: usize },
 

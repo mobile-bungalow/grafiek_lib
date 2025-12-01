@@ -54,9 +54,9 @@ pub struct GraphError {
 #[derive(Debug, Clone)]
 pub enum Mutation {
     /// Node was created
-    CreateNode { id: NodeIndex, record: NodeRecord },
+    CreateNode { idx: NodeIndex, record: NodeRecord },
     /// Node was deleted
-    DeleteNode { id: NodeIndex, record: NodeRecord },
+    DeleteNode { idx: NodeIndex, record: NodeRecord },
     /// Edge was connected
     Connect {
         from_node: NodeIndex,
@@ -135,8 +135,8 @@ impl Mutation {
     /// Returns the inverse mutation for undo
     pub fn inverse(&self) -> Mutation {
         match self.clone() {
-            Mutation::CreateNode { id, record } => Mutation::DeleteNode { id, record },
-            Mutation::DeleteNode { id, record } => Mutation::CreateNode { id, record },
+            Mutation::CreateNode { idx, record } => Mutation::DeleteNode { idx, record },
+            Mutation::DeleteNode { idx, record } => Mutation::CreateNode { idx, record },
             Mutation::Connect {
                 from_node,
                 from_slot,

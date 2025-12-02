@@ -34,11 +34,15 @@ impl Operation for Input {
     fn execute(
         &mut self,
         _ctx: &mut ExecutionContext,
-        _inputs: Inputs,
-        _outputs: Outputs,
+        inputs: Inputs,
+        mut outputs: Outputs,
     ) -> Result<()> {
         // Forward input to output
-        // TODO: copy input[0] to output[0]
+        if let (crate::ValueRef::F32(input), crate::ValueMut::F32(output)) =
+            (&inputs[0], &mut outputs[0])
+        {
+            **output = **input;
+        }
         Ok(())
     }
 }

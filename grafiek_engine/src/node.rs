@@ -151,7 +151,15 @@ impl Node {
 
 // record access
 impl Node {
-    /// Get read access to an input value
+    /// Get the effective input value (incoming if connected, otherwise record).
+    pub fn input_value(&self, index: usize) -> Option<&Value> {
+        self.incoming_input_values
+            .get(index)
+            .and_then(|v| v.as_ref())
+            .or_else(|| self.record.input_values.get(index))
+    }
+
+    /// Get read access to the stored record input value (ignores incoming).
     pub fn record_input_value(&self, index: usize) -> Option<&Value> {
         self.record.input_values.get(index)
     }

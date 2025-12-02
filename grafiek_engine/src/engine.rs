@@ -204,6 +204,39 @@ impl Engine {
         Ok(())
     }
 
+    /// Disconnect an edge between two nodes.
+    ///
+    /// Emits: [`Mutation::Disconnect`]
+    pub fn disconnect(
+        &mut self,
+        from: NodeIndex,
+        to: NodeIndex,
+        from_slot: usize,
+        to_slot: usize,
+    ) -> Result<(), Error> {
+        // Find and remove the edge
+        let edge_id = self
+            .graph
+            .edges_connecting(from, to)
+            .find(|e| e.weight().source_slot == from_slot && e.weight().sink_slot == to_slot)
+            .map(|e| e.id())
+            .ok_or_else(|| Error::EdgeNotFound { from_slot, to_slot })?;
+
+        self.graph.remove_edge(edge_id);
+
+        // Clear the incoming value on the target node
+        self.graph[to].clear_incoming(to_slot);
+
+        self.emit(Mutation::Disconnect {
+            from_node: from,
+            from_slot,
+            to_node: to,
+            to_slot,
+        });
+
+        Ok(())
+    }
+
     pub fn node_count(&self) -> usize {
         self.graph.node_count()
     }
@@ -264,13 +297,13 @@ impl Engine {
     pub fn result(&self, index: usize) -> Option<&Value> {
         self.output_nodes()
             .nth(index)
-            .and_then(|n| n.record_input_value(0))
+            .and_then(|n| n.input_value(0))
     }
 
     /// Iterate over all graph output values.
     /// Returns values from all Output nodes in the order they were added.
     pub fn results(&self) -> impl Iterator<Item = &Value> {
-        self.output_nodes().filter_map(|n| n.record_input_value(0))
+        self.output_nodes().filter_map(|n| n.input_value(0))
     }
 
     /// Iterate over all Output nodes in the graph.

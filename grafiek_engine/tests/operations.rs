@@ -125,7 +125,7 @@ fn test_add_operation_with_node_inputs() {
     engine.execute();
 
     let output_node = engine.get_node(output).unwrap();
-    let value = output_node.record_input_value(0).unwrap();
+    let value = output_node.input_value(0).unwrap();
     if let Value::F32(v) = value {
         assert_eq!(*v, 7.0);
     } else {

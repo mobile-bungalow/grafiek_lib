@@ -28,6 +28,9 @@ pub enum Error {
     #[error("Connection would create a cycle in the graph")]
     CreatesLoop,
 
+    #[error("Edge not found: from slot {from_slot} to slot {to_slot}")]
+    EdgeNotFound { from_slot: usize, to_slot: usize },
+
     #[error("Node accessed while modifying graph input was not an instance of core/input.")]
     NotInputNode,
 

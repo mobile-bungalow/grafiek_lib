@@ -1,7 +1,7 @@
 use grafiek_engine::{Engine, EngineDescriptor};
 use wgpu::{self, ExperimentalFeatures};
 
-#[warn(dead_code)]
+#[allow(dead_code)]
 pub fn engine() -> Engine {
     let (device, queue) = setup_wgpu();
     Engine::init(EngineDescriptor {

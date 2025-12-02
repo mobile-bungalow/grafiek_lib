@@ -18,6 +18,18 @@ impl SignatureRegistery {
         Self::default()
     }
 
+    pub fn push_input_raw(&mut self, def: SlotDef) {
+        self.inputs.push(def);
+    }
+
+    pub fn push_config_raw(&mut self, def: SlotDef) {
+        self.config.push(def);
+    }
+
+    pub fn push_output_raw(&mut self, def: SlotDef) {
+        self.outputs.push(def);
+    }
+
     pub fn add_input<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
         SlotBuilder::new(&mut self.inputs, name)
     }

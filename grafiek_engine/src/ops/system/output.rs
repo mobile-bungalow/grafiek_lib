@@ -1,10 +1,8 @@
-use std::any::Any;
-
-use crate::ExecutionContext;
 use crate::error::Result;
 use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs};
+use crate::{CommonMetadata, ExecutionContext};
 
 pub struct Output;
 
@@ -18,7 +16,12 @@ impl Operation for Output {
     }
 
     fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
-        registry.add_input::<f32>("value").build();
+        registry.push_input_raw(crate::SlotDef {
+            value_type: crate::ValueType::Any,
+            name: "value".into(),
+            extended: crate::ExtendedMetadata::None,
+            common: CommonMetadata::default(),
+        });
     }
 
     fn execute(

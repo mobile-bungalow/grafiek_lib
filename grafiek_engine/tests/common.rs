@@ -1,4 +1,15 @@
+use grafiek_engine::{Engine, EngineDescriptor};
 use wgpu::{self, ExperimentalFeatures};
+
+pub fn engine() -> Engine {
+    let (device, queue) = setup_wgpu();
+    Engine::init(EngineDescriptor {
+        device,
+        queue,
+        on_message: None,
+    })
+    .unwrap()
+}
 
 pub fn setup_wgpu() -> (wgpu::Device, wgpu::Queue) {
     let instance = if cfg!(windows) {

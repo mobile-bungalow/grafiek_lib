@@ -1,8 +1,8 @@
+use crate::ExecutionContext;
 use crate::error::Result;
-use crate::registry::{SignatureRegistery, SlotMetadata};
+use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs, ValueRef};
-use crate::{ExecutionContext, ValueType};
 
 pub struct Add;
 
@@ -16,24 +16,9 @@ impl Operation for Add {
     }
 
     fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
-        registry.add_input(
-            ValueType::F32,
-            SlotMetadata {
-                name: "a".to_string(),
-            },
-        );
-        registry.add_input(
-            ValueType::F32,
-            SlotMetadata {
-                name: "b".to_string(),
-            },
-        );
-        registry.add_output(
-            ValueType::F32,
-            SlotMetadata {
-                name: "result".to_string(),
-            },
-        );
+        registry.add_input::<f32>("a").build();
+        registry.add_input::<f32>("b").build();
+        registry.add_output::<f32>("result").build();
     }
 
     fn execute(
@@ -42,12 +27,12 @@ impl Operation for Add {
         inputs: Inputs,
         mut outputs: Outputs,
     ) -> Result<()> {
-        let a = match &inputs[0] {
-            ValueRef::F32(v) => **v,
+        let a = match inputs[0] {
+            ValueRef::F32(v) => *v,
             _ => 0.0,
         };
-        let b = match &inputs[1] {
-            ValueRef::F32(v) => **v,
+        let b = match inputs[1] {
+            ValueRef::F32(v) => *v,
             _ => 0.0,
         };
 

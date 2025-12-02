@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Error;
 use crate::traits::{OpPath, Operation};
 use crate::value::{Inputs, Outputs};
-use crate::{ExecutionContext, SignatureRegistery, SlotDef, Value, ValueMut};
+use crate::{ExecutionContext, InputSlotDef, SignatureRegistery, Value, ValueMut};
 
 /// Engine provided unique ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,7 +220,7 @@ impl Node {
     /// that superscedes changes here
     pub fn edit_input<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&SlotDef, ValueMut) -> T,
+        F: FnOnce(&InputSlotDef, ValueMut) -> T,
     {
         let slot = self
             .record
@@ -243,7 +243,7 @@ impl Node {
 
     pub fn edit_config<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&SlotDef, ValueMut) -> T,
+        F: FnOnce(&InputSlotDef, ValueMut) -> T,
     {
         let slot = self
             .record
@@ -263,7 +263,7 @@ impl Node {
         Ok(t)
     }
 
-    pub fn configure(&mut self, ctx: &mut ExecutionContext) -> crate::error::Result<()> {
+    pub fn configure(&mut self) -> crate::error::Result<()> {
         self.operation
             .configure(&self.record.config_values, &mut self.signature)
     }

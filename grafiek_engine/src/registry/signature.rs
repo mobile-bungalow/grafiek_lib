@@ -1,15 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use super::{SlotDef, SlotMetadata};
-use crate::ValueType;
+use super::slot::{InputSlotBuilder, InputSlotDef, OutputSlotBuilder, OutputSlotDef};
+use crate::AsValueType;
+use crate::traits::{ConfigSchema, InputSchema, OutputSchema};
 
-/// Serializable signature definition for a node.
-/// Defines the inputs, outputs, and configuration slots.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignatureRegistery {
-    pub inputs: Vec<SlotDef>,
-    pub outputs: Vec<SlotDef>,
-    pub config: Vec<SlotDef>,
+    pub inputs: Vec<InputSlotDef>,
+    pub outputs: Vec<OutputSlotDef>,
+    pub config: Vec<InputSlotDef>,
 }
 
 impl SignatureRegistery {
@@ -17,52 +16,63 @@ impl SignatureRegistery {
         Self::default()
     }
 
-    /// Add an input slot
-    pub fn add_input(&mut self, value_type: ValueType, metadata: SlotMetadata) {
-        self.inputs.push(SlotDef::new(value_type, metadata));
+    pub fn add_input<T: AsValueType>(
+        &mut self,
+        name: impl Into<String>,
+    ) -> InputSlotBuilder<'_, T> {
+        InputSlotBuilder::new(&mut self.inputs, name)
     }
 
-    /// Add an output slot
-    pub fn add_output(&mut self, value_type: ValueType, metadata: SlotMetadata) {
-        self.outputs.push(SlotDef::new(value_type, metadata));
+    pub fn add_output<T: AsValueType>(
+        &mut self,
+        name: impl Into<String>,
+    ) -> OutputSlotBuilder<'_, T> {
+        OutputSlotBuilder::new(&mut self.outputs, name)
     }
 
-    /// Add a config slot
-    pub fn add_config(&mut self, value_type: ValueType, metadata: SlotMetadata) {
-        self.config.push(SlotDef::new(value_type, metadata));
+    pub fn add_config<T: AsValueType>(
+        &mut self,
+        name: impl Into<String>,
+    ) -> InputSlotBuilder<'_, T> {
+        InputSlotBuilder::new(&mut self.config, name)
     }
 
-    /// Get input slot definition by index
-    pub fn input(&self, index: usize) -> Option<&SlotDef> {
+    pub fn register_inputs<S: InputSchema>(&mut self) {
+        S::register(self);
+    }
+
+    pub fn register_outputs<S: OutputSchema>(&mut self) {
+        S::register(self);
+    }
+
+    pub fn register_config<S: ConfigSchema>(&mut self) {
+        S::register(self);
+    }
+
+    pub fn input(&self, index: usize) -> Option<&InputSlotDef> {
         self.inputs.get(index)
     }
 
-    /// Get output slot definition by index
-    pub fn output(&self, index: usize) -> Option<&SlotDef> {
+    pub fn output(&self, index: usize) -> Option<&OutputSlotDef> {
         self.outputs.get(index)
     }
 
-    /// Get config slot definition by index
-    pub fn config(&self, index: usize) -> Option<&SlotDef> {
+    pub fn config(&self, index: usize) -> Option<&InputSlotDef> {
         self.config.get(index)
     }
 
-    /// Number of input slots
     pub fn input_count(&self) -> usize {
         self.inputs.len()
     }
 
-    /// Number of output slots
     pub fn output_count(&self) -> usize {
         self.outputs.len()
     }
 
-    /// Number of config slots
     pub fn config_count(&self) -> usize {
         self.config.len()
     }
 
-    /// Clear all slots (used when reconfiguring)
     pub fn clear(&mut self) {
         self.inputs.clear();
         self.outputs.clear();

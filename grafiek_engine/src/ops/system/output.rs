@@ -1,8 +1,8 @@
+use crate::ExecutionContext;
 use crate::error::Result;
-use crate::registry::{SignatureRegistery, SlotMetadata};
+use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs};
-use crate::{ExecutionContext, ValueType};
 
 pub struct Output;
 
@@ -16,12 +16,7 @@ impl Operation for Output {
     }
 
     fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
-        registry.add_input(
-            ValueType::F32,
-            SlotMetadata {
-                name: "value".to_string(),
-            },
-        );
+        registry.add_input::<f32>("value").build();
     }
 
     fn execute(
@@ -30,7 +25,6 @@ impl Operation for Output {
         _inputs: Inputs,
         _outputs: Outputs,
     ) -> Result<()> {
-        // Output nodes just hold the value for get_graph_output to read
         Ok(())
     }
 }

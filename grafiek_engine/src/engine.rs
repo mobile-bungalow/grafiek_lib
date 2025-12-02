@@ -5,7 +5,7 @@ use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
-use crate::{SlotDef, Value, ValueMut};
+use crate::{InputSlotDef, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue};
@@ -108,7 +108,7 @@ impl Engine {
         let mut node = Node::new(operation, id);
 
         node.setup(&mut self.exe_ctx);
-        node.configure(&mut self.exe_ctx)?;
+        node.configure()?;
 
         let record = node.record().clone();
         let index = self.graph.add_node(node);
@@ -251,7 +251,7 @@ impl Engine {
 
     pub fn edit_graph_input<F, T>(&mut self, index: NodeIndex, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&SlotDef, ValueMut) -> T,
+        F: FnOnce(&InputSlotDef, ValueMut) -> T,
     {
         let node = self
             .graph
@@ -276,7 +276,7 @@ impl Engine {
     /// Edit a node's input slot directly
     pub fn edit_node_input<F, T>(&mut self, index: NodeIndex, slot: usize, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&SlotDef, ValueMut) -> T,
+        F: FnOnce(&InputSlotDef, ValueMut) -> T,
     {
         let node = self
             .graph

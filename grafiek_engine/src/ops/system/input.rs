@@ -1,8 +1,8 @@
+use crate::ExecutionContext;
 use crate::error::Result;
-use crate::registry::{SignatureRegistery, SlotMetadata};
+use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs};
-use crate::{ExecutionContext, ValueType};
 
 pub struct Input;
 
@@ -16,19 +16,8 @@ impl Operation for Input {
     }
 
     fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
-        // Input node stores a value and forwards it to its output
-        registry.add_input(
-            ValueType::F32,
-            SlotMetadata {
-                name: "value".to_string(),
-            },
-        );
-        registry.add_output(
-            ValueType::F32,
-            SlotMetadata {
-                name: "value".to_string(),
-            },
-        );
+        registry.add_input::<f32>("value").build();
+        registry.add_output::<f32>("value").build();
     }
 
     fn execute(
@@ -37,7 +26,6 @@ impl Operation for Input {
         inputs: Inputs,
         mut outputs: Outputs,
     ) -> Result<()> {
-        // Forward input to output
         if let (crate::ValueRef::F32(input), crate::ValueMut::F32(output)) =
             (&inputs[0], &mut outputs[0])
         {

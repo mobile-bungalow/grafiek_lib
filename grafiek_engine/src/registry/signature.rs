@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use super::slot::{InputSlotBuilder, InputSlotDef, OutputSlotBuilder, OutputSlotDef};
+use super::slot::{SlotBuilder, SlotDef};
 use crate::AsValueType;
 use crate::traits::{ConfigSchema, InputSchema, OutputSchema};
 
+/// Collects slot definitions for an operation's inputs, outputs, and config.
+/// Slots are registered via push-based builders during [Operation::setup].
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignatureRegistery {
-    pub inputs: Vec<InputSlotDef>,
-    pub outputs: Vec<OutputSlotDef>,
-    pub config: Vec<InputSlotDef>,
+    pub inputs: Vec<SlotDef>,
+    pub outputs: Vec<SlotDef>,
+    pub config: Vec<SlotDef>,
 }
 
 impl SignatureRegistery {
@@ -16,25 +18,16 @@ impl SignatureRegistery {
         Self::default()
     }
 
-    pub fn add_input<T: AsValueType>(
-        &mut self,
-        name: impl Into<String>,
-    ) -> InputSlotBuilder<'_, T> {
-        InputSlotBuilder::new(&mut self.inputs, name)
+    pub fn add_input<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+        SlotBuilder::new(&mut self.inputs, name)
     }
 
-    pub fn add_output<T: AsValueType>(
-        &mut self,
-        name: impl Into<String>,
-    ) -> OutputSlotBuilder<'_, T> {
-        OutputSlotBuilder::new(&mut self.outputs, name)
+    pub fn add_output<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+        SlotBuilder::new(&mut self.outputs, name)
     }
 
-    pub fn add_config<T: AsValueType>(
-        &mut self,
-        name: impl Into<String>,
-    ) -> InputSlotBuilder<'_, T> {
-        InputSlotBuilder::new(&mut self.config, name)
+    pub fn add_config<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+        SlotBuilder::new(&mut self.config, name)
     }
 
     pub fn register_inputs<S: InputSchema>(&mut self) {
@@ -49,15 +42,15 @@ impl SignatureRegistery {
         S::register(self);
     }
 
-    pub fn input(&self, index: usize) -> Option<&InputSlotDef> {
+    pub fn input(&self, index: usize) -> Option<&SlotDef> {
         self.inputs.get(index)
     }
 
-    pub fn output(&self, index: usize) -> Option<&OutputSlotDef> {
+    pub fn output(&self, index: usize) -> Option<&SlotDef> {
         self.outputs.get(index)
     }
 
-    pub fn config(&self, index: usize) -> Option<&InputSlotDef> {
+    pub fn config(&self, index: usize) -> Option<&SlotDef> {
         self.config.get(index)
     }
 

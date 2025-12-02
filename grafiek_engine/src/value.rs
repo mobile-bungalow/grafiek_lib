@@ -15,6 +15,8 @@ pub enum ValueError {
     TypeMismatch { wanted: String, found: String },
 }
 
+// TODO: This is a psycho loadbearing macro I would reallllly
+// like to prune this down and the traits involved if possible
 macro_rules! define_value_enum {
     (
         $(
@@ -29,7 +31,7 @@ macro_rules! define_value_enum {
             Null(()),
         }
 
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, Clone, Copy, PartialEq)]
         pub enum ValueRef<'a> {
             $(
                 $variant(&'a $ty),
@@ -115,9 +117,7 @@ macro_rules! define_value_enum {
             }
 
             impl AsValueType for $ty {
-                fn value_type() -> ValueType {
-                    ValueType::$variant
-                }
+                const VALUE_TYPE: ValueType = ValueType::$variant;
             }
 
             impl<'a> TryFrom<&'a mut Value> for &'a mut $ty {
@@ -147,13 +147,48 @@ macro_rules! define_value_enum {
                     Ok(v)
                 }
             }
+
+            impl Extract for $ty {
+                fn extract(value: ValueRef<'_>) -> Result<Self, ValueError> {
+                    match value {
+                        ValueRef::$variant(v) => Ok(*v),
+                        other => Err(ValueError::TypeMismatch {
+                            wanted: stringify!($variant).to_string(),
+                            found: format!("{:?}", other),
+                        }),
+                    }
+                }
+            }
+
+            impl ExtractMut for $ty {
+                fn extract_mut<'a>(value: &'a mut ValueMut<'_>) -> Result<&'a mut Self, ValueError> {
+                    match value {
+                        ValueMut::$variant(v) => Ok(v),
+                        other => Err(ValueError::TypeMismatch {
+                            wanted: stringify!($variant).to_string(),
+                            found: format!("{:?}", other),
+                        }),
+                    }
+                }
+            }
         )*
 
     };
 }
 
 pub trait AsValueType {
-    fn value_type() -> ValueType;
+    const VALUE_TYPE: ValueType;
+    fn value_type() -> ValueType {
+        Self::VALUE_TYPE
+    }
+}
+
+pub trait Extract: Sized + Copy {
+    fn extract(value: ValueRef<'_>) -> Result<Self, ValueError>;
+}
+
+pub trait ExtractMut: Sized {
+    fn extract_mut<'a>(value: &'a mut ValueMut<'_>) -> Result<&'a mut Self, ValueError>;
 }
 
 /// Handle to a texture stored in the engine's texture pool.
@@ -247,18 +282,27 @@ impl fmt::Display for ValueType {
     }
 }
 
-/// Read-only view into input values for [Operation::execute]
 pub type Inputs<'a> = ArrayVec<ValueRef<'a>, MAX_SLOTS>;
-
-/// Mutable view into output values for [Operation::execute]
 pub type Outputs<'a> = ArrayVec<ValueMut<'a>, MAX_SLOTS>;
 
-/// Collect immutable views from a slice of Values
-pub fn inputs_from_slice(values: &[Value]) -> Inputs<'_> {
-    values.iter().map(Value::as_ref).collect()
+pub trait InputsExt {
+    fn extract<T: Extract>(&self, index: usize) -> Result<T, ValueError>;
 }
 
-/// Collect mutable views from a slice of Values
-pub fn outputs_from_slice(values: &mut [Value]) -> Outputs<'_> {
-    values.iter_mut().map(Value::as_mut).collect()
+impl InputsExt for Inputs<'_> {
+    fn extract<T: Extract>(&self, index: usize) -> Result<T, ValueError> {
+        let value = self.get(index).ok_or(ValueError::Index(index))?;
+        T::extract(*value)
+    }
+}
+
+pub trait OutputsExt {
+    fn extract<T: ExtractMut>(&mut self, index: usize) -> Result<&mut T, ValueError>;
+}
+
+impl OutputsExt for Outputs<'_> {
+    fn extract<T: ExtractMut>(&mut self, index: usize) -> Result<&mut T, ValueError> {
+        let slot = self.get_mut(index).ok_or(ValueError::Index(index))?;
+        T::extract_mut(slot)
+    }
 }

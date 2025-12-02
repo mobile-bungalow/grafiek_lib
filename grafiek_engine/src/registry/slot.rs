@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +17,7 @@ pub struct CommonMetadata {
     pub visible: bool,
 }
 
-pub trait InputMetadataFor<T> {}
+pub trait MetadataFor<T> {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FloatRange {
@@ -25,7 +27,7 @@ pub struct FloatRange {
     pub default: f32,
 }
 
-impl InputMetadataFor<f32> for FloatRange {}
+impl MetadataFor<f32> for FloatRange {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Angle {
@@ -42,7 +44,7 @@ pub enum AngleUnit {
     Degrees,
 }
 
-impl InputMetadataFor<f32> for Angle {}
+impl MetadataFor<f32> for Angle {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntRange {
@@ -52,7 +54,7 @@ pub struct IntRange {
     pub default: i32,
 }
 
-impl InputMetadataFor<i32> for IntRange {}
+impl MetadataFor<i32> for IntRange {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntEnum {
@@ -60,17 +62,18 @@ pub struct IntEnum {
     pub default: i32,
 }
 
-impl InputMetadataFor<i32> for IntEnum {}
+impl MetadataFor<i32> for IntEnum {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Boolean {
     pub default: bool,
 }
 
-impl InputMetadataFor<i32> for Boolean {} // bools stored as i32
+impl MetadataFor<i32> for Boolean {}
+impl<T> MetadataFor<T> for Vec<u8> {}
 
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
-pub enum InputExtendedMetadata {
+pub enum ExtendedMetadata {
     None,
     FloatRange(FloatRange),
     Angle(Angle),
@@ -81,85 +84,82 @@ pub enum InputExtendedMetadata {
     Custom(Vec<u8>),
 }
 
-impl Default for InputExtendedMetadata {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-pub trait OutputMetadataFor<T> {}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct NumericOutput {}
-
-impl<T> OutputMetadataFor<T> for Vec<u8> {}
-impl<T> InputMetadataFor<T> for Vec<u8> {}
-
-#[derive(Debug, Clone, From, Serialize, Deserialize)]
-pub enum OutputExtendedMetadata {
-    None,
-    #[from]
-    Custom(Vec<u8>),
-}
-
-impl Default for OutputExtendedMetadata {
+impl Default for ExtendedMetadata {
     fn default() -> Self {
         Self::None
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SlotMetadata<E> {
-    pub name: String,
-    pub extended: E,
+pub struct SlotDef {
+    pub value_type: ValueType,
+    pub name: Cow<'static, str>,
+    #[serde(default)]
+    pub extended: ExtendedMetadata,
+    #[serde(default)]
     pub common: CommonMetadata,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SlotDef<E> {
-    pub value_type: ValueType,
-    pub metadata: SlotMetadata<E>,
-}
-
-impl<E: Default> SlotDef<E> {
-    pub fn new(value_type: ValueType, name: impl Into<String>, extended: E) -> Self {
+impl Default for SlotDef {
+    fn default() -> Self {
         Self {
-            value_type,
-            metadata: SlotMetadata {
-                name: name.into(),
-                extended,
-                common: CommonMetadata::default(),
-            },
+            value_type: ValueType::Any,
+            name: Cow::Borrowed(""),
+            extended: ExtendedMetadata::None,
+            common: CommonMetadata::default(),
         }
     }
 }
 
-pub type InputSlotDef = SlotDef<InputExtendedMetadata>;
-pub type OutputSlotDef = SlotDef<OutputExtendedMetadata>;
+impl SlotDef {
+    pub const fn new(value_type: ValueType, name: &'static str) -> Self {
+        Self {
+            value_type,
+            name: Cow::Borrowed(name),
+            extended: ExtendedMetadata::None,
+            common: CommonMetadata {
+                tooltip: String::new(),
+                interactive: false,
+                enabled: false,
+                visible: false,
+            },
+        }
+    }
 
-pub struct InputSlotBuilder<'a, T> {
-    registry: &'a mut Vec<InputSlotDef>,
-    name: String,
-    extended: InputExtendedMetadata,
+    pub fn with_metadata(
+        value_type: ValueType,
+        name: &'static str,
+        extended: ExtendedMetadata,
+    ) -> Self {
+        Self {
+            value_type,
+            name: Cow::Borrowed(name),
+            extended,
+            common: CommonMetadata::default(),
+        }
+    }
+}
+
+pub struct SlotBuilder<'a, T> {
+    registry: &'a mut Vec<SlotDef>,
+    name: Cow<'static, str>,
+    extended: ExtendedMetadata,
     common: CommonMetadata,
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: crate::AsValueType> InputSlotBuilder<'a, T> {
-    pub fn new(registry: &'a mut Vec<InputSlotDef>, name: impl Into<String>) -> Self {
+impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
+    pub fn new(registry: &'a mut Vec<SlotDef>, name: &'static str) -> Self {
         Self {
             registry,
-            name: name.into(),
-            extended: InputExtendedMetadata::None,
+            name: Cow::Borrowed(name),
+            extended: ExtendedMetadata::None,
             common: CommonMetadata::default(),
             _marker: std::marker::PhantomData,
         }
     }
 
-    pub fn meta<M: InputMetadataFor<T> + Into<InputExtendedMetadata>>(
-        mut self,
-        metadata: M,
-    ) -> Self {
+    pub fn meta<M: MetadataFor<T> + Into<ExtendedMetadata>>(mut self, metadata: M) -> Self {
         self.extended = metadata.into();
         self
     }
@@ -180,57 +180,11 @@ impl<'a, T: crate::AsValueType> InputSlotBuilder<'a, T> {
     }
 
     pub fn build(self) {
-        self.registry.push(InputSlotDef {
+        self.registry.push(SlotDef {
             value_type: T::value_type(),
-            metadata: SlotMetadata {
-                name: self.name,
-                extended: self.extended,
-                common: self.common,
-            },
-        });
-    }
-}
-
-pub struct OutputSlotBuilder<'a, T> {
-    registry: &'a mut Vec<OutputSlotDef>,
-    name: String,
-    extended: OutputExtendedMetadata,
-    common: CommonMetadata,
-    _marker: std::marker::PhantomData<T>,
-}
-
-impl<'a, T: crate::AsValueType> OutputSlotBuilder<'a, T> {
-    pub fn new(registry: &'a mut Vec<OutputSlotDef>, name: impl Into<String>) -> Self {
-        Self {
-            registry,
-            name: name.into(),
-            extended: OutputExtendedMetadata::None,
-            common: CommonMetadata::default(),
-            _marker: std::marker::PhantomData,
-        }
-    }
-
-    pub fn meta<M: OutputMetadataFor<T> + Into<OutputExtendedMetadata>>(
-        mut self,
-        metadata: M,
-    ) -> Self {
-        self.extended = metadata.into();
-        self
-    }
-
-    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
-        self.common.tooltip = text.into();
-        self
-    }
-
-    pub fn build(self) {
-        self.registry.push(OutputSlotDef {
-            value_type: T::value_type(),
-            metadata: SlotMetadata {
-                name: self.name,
-                extended: self.extended,
-                common: self.common,
-            },
+            name: self.name,
+            extended: self.extended,
+            common: self.common,
         });
     }
 }

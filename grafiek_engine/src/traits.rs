@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::registry::{Metadata, SignatureRegistery};
+use crate::registry::{SignatureRegistery, SlotDef};
 use crate::value::{Inputs, Outputs};
 use crate::{ExecutionContext, Value, ValueType};
 
@@ -81,36 +81,36 @@ pub trait Operation {
     }
 }
 
-/// Convenience trait for describing reflective schemas for nodes defined in rust.
-/// Allows for easy extraction of input and config and easy writing to output.
 pub trait Schema: Default {
-    /// Metadata attached to a given field
-    fn metadata(field: &str) -> Metadata;
-
-    /// Field names
-    fn fields() -> &'static [&'static str];
-
-    /// Number of fields
-    fn len() -> usize;
+    const FIELDS: &'static [SlotDef];
 }
 
-/// Registers this type as the Output
 pub trait OutputSchema: Schema {
-    fn register(register: &mut SignatureRegistery);
-    /// Try to write this to the outputs
+    fn register(registry: &mut SignatureRegistery) {
+        for field in Self::FIELDS {
+            registry.outputs.push(field.clone());
+        }
+    }
+
     fn try_write(&self, output: Outputs) -> Result<()>;
 }
 
-/// Registers this type as the Input
 pub trait InputSchema: Schema {
-    fn register(register: &mut SignatureRegistery);
-    /// Try to pull this from the inputs
+    fn register(registry: &mut SignatureRegistery) {
+        for field in Self::FIELDS {
+            registry.inputs.push(field.clone());
+        }
+    }
+
     fn try_extract(values: Inputs) -> Result<Self>;
 }
 
-/// Registers this type as the Configuration
 pub trait ConfigSchema: Schema {
-    fn register(register: &mut SignatureRegistery);
+    fn register(registry: &mut SignatureRegistery) {
+        for field in Self::FIELDS {
+            registry.config.push(field.clone());
+        }
+    }
 }
 
 /// Unique identifier for an operation type.
@@ -153,14 +153,12 @@ pub trait OperationFactory: 'static {
 #[derive(Debug, Clone)]
 pub(crate) struct OperationFactoryEntry {
     pub build: fn() -> Result<Box<dyn Operation>>,
-    pub label: &'static str,
 }
 
 impl OperationFactoryEntry {
     pub fn new<T: OperationFactory>() -> Self {
         Self {
             build: || T::build(),
-            label: T::LABEL,
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::ExecutionContext;
 use crate::error::Result;
 use crate::registry::SignatureRegistery;
 use crate::traits::{OpPath, Operation, OperationFactory};
-use crate::value::{Inputs, Outputs, ValueRef};
+use crate::value::{Inputs, InputsExt, Outputs, OutputsExt};
 
 pub struct Add;
 
@@ -27,22 +27,9 @@ impl Operation for Add {
         inputs: Inputs,
         mut outputs: Outputs,
     ) -> Result<()> {
-        let a = match inputs[0] {
-            ValueRef::F32(v) => *v,
-            _ => 0.0,
-        };
-        let b = match inputs[1] {
-            ValueRef::F32(v) => *v,
-            _ => 0.0,
-        };
-
-        match &mut outputs[0] {
-            crate::ValueMut::F32(v) => {
-                **v = a + b;
-            }
-            _ => {}
-        };
-
+        let a: f32 = inputs.extract(0)?;
+        let b: f32 = inputs.extract(1)?;
+        *outputs.extract::<f32>(0)? = a + b;
         Ok(())
     }
 }

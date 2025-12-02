@@ -58,28 +58,21 @@ fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<Token
 
     let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
     let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
-
-    let field_count = field_names.len();
     let field_name_strs: Vec<_> = field_names
         .iter()
         .map(|n| n.as_ref().unwrap().to_string())
         .collect();
 
-    let field_indices: Vec<_> = (0..field_count).collect();
-
     let schema_impl = quote! {
         impl grafiek_engine::traits::Schema for #name {
-            fn metadata(field: &str) -> grafiek_engine::Metadata {
-                grafiek_engine::Metadata {}
-            }
-
-            fn fields() -> &'static [&'static str] {
-                &[#(#field_name_strs),*]
-            }
-
-            fn len() -> usize {
-                #field_count
-            }
+            const FIELDS: &'static [grafiek_engine::SlotDef] = &[
+                #(
+                    grafiek_engine::SlotDef::new(
+                        <#field_types as grafiek_engine::AsValueType>::VALUE_TYPE,
+                        #field_name_strs,
+                    ),
+                )*
+            ];
         }
     };
 
@@ -98,45 +91,20 @@ fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<Token
     let kind_impl = match kind {
         SchemaKind::Input => quote! {
             impl grafiek_engine::traits::InputSchema for #name {
-                fn register(registry: &mut grafiek_engine::SignatureRegistery) {
-                    #(
-                        registry.add_input::<#field_types>(#field_name_strs).build();
-                    )*
-                }
-
                 fn try_extract(inputs: grafiek_engine::Inputs) -> grafiek_engine::error::Result<Self> {
-                    Ok(Self {
-                        #(
-                            #field_names: *inputs.get::<#field_types>(#field_indices)?,
-                        )*
-                    })
+                    todo!("try_extract not yet implemented")
                 }
             }
         },
         SchemaKind::Output => quote! {
             impl grafiek_engine::traits::OutputSchema for #name {
-                fn register(registry: &mut grafiek_engine::SignatureRegistery) {
-                    #(
-                        registry.add_output::<#field_types>(#field_name_strs).build();
-                    )*
-                }
-
                 fn try_write(&self, mut outputs: grafiek_engine::Outputs) -> grafiek_engine::error::Result<()> {
-                    #(
-                        outputs.set(#field_indices, self.#field_names.clone())?;
-                    )*
-                    Ok(())
+                    todo!("try_write not yet implemented")
                 }
             }
         },
         SchemaKind::Config => quote! {
-            impl grafiek_engine::traits::ConfigSchema for #name {
-                fn register(registry: &mut grafiek_engine::SignatureRegistery) {
-                    #(
-                        registry.add_config::<#field_types>(#field_name_strs).build();
-                    )*
-                }
-            }
+            impl grafiek_engine::traits::ConfigSchema for #name {}
         },
     };
 

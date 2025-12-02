@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Error;
 use crate::traits::{OpPath, Operation};
 use crate::value::{Inputs, Outputs};
-use crate::{ExecutionContext, InputSlotDef, SignatureRegistery, Value, ValueMut};
+use crate::{ExecutionContext, SignatureRegistery, SlotDef, Value, ValueMut};
 
 /// Engine provided unique ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,7 +220,7 @@ impl Node {
     /// that superscedes changes here
     pub fn edit_input<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&InputSlotDef, ValueMut) -> T,
+        F: FnOnce(&SlotDef, ValueMut) -> T,
     {
         let slot = self
             .record
@@ -243,7 +243,7 @@ impl Node {
 
     pub fn edit_config<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
-        F: FnOnce(&InputSlotDef, ValueMut) -> T,
+        F: FnOnce(&SlotDef, ValueMut) -> T,
     {
         let slot = self
             .record
@@ -298,7 +298,7 @@ impl Node {
     /// Builds inputs from incoming values (or falls back to record values),
     /// then calls the operation's execute method.
     pub fn execute(&mut self, ctx: &mut ExecutionContext) -> crate::error::Result<()> {
-        // Build inputs: use incoming value if present, otherwise fall back to record
+        // select the default from the record inputs if the incoming edges do not exist.
         let inputs: Inputs = self
             .incoming_input_values
             .iter()
@@ -306,10 +306,8 @@ impl Node {
             .map(|(incoming, record)| incoming.as_ref().unwrap_or(record).as_ref())
             .collect();
 
-        // Build mutable outputs
         let outputs: Outputs = self.output_values.iter_mut().map(Value::as_mut).collect();
 
-        // Execute the operation
         self.operation.execute(ctx, inputs, outputs)?;
 
         // Clear dirty flag after successful execution

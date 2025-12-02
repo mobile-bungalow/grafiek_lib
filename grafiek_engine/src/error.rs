@@ -16,6 +16,15 @@ pub enum Error {
     #[error("No port on node: {0}")]
     NoPort(usize),
 
+    #[error("No output slot at index {0}")]
+    NoOutputSlot(usize),
+
+    #[error("No input slot at index {0}")]
+    NoInputSlot(usize),
+
+    #[error("Incompatible types: output slot {from_slot} cannot connect to input slot {to_slot}")]
+    IncompatibleTypes { from_slot: usize, to_slot: usize },
+
     #[error("Node accessed while modifying graph input was not an instance of core/input.")]
     NotInputNode,
 

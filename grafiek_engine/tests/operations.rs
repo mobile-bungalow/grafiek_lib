@@ -84,7 +84,7 @@ fn test_add_operation_with_graph_inputs() {
     assert_eq!(add_node.input_count(), 2);
     assert_eq!(add_node.output_count(), 1);
 
-    if let Some(Value::F32(v)) = engine.get_graph_output(0) {
+    if let Some(Value::F32(v)) = engine.result(0) {
         assert_eq!(*v, 7.0);
     } else {
         panic!("Expected F32 value");

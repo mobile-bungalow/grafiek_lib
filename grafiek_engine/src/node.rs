@@ -28,9 +28,6 @@ pub struct NodeRecord {
     pub input_values: Vec<Value>,
     /// Config values for any settings related to node operation
     pub config_values: Vec<Value>,
-    /// Hashmap of user provided key value pairs
-    /// TODO: when we know what serialization format we are using use a value here.
-    pub userdata: HashMap<String, ()>,
 }
 
 impl NodeRecord {
@@ -42,7 +39,6 @@ impl NodeRecord {
             position: (0.0, 0.0),
             input_values: vec![],
             config_values: vec![],
-            userdata: HashMap::new(),
         }
     }
 }
@@ -78,6 +74,21 @@ pub struct Node {
     dirty: DirtyFlag,
 }
 
+/// Result of probing whether a connection is type-compatible.
+/// This only validates node-level concerns (slots and types).
+/// Graph-level concerns (existing edges) are handled by the Engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionProbe {
+    /// Connection is valid
+    Ok,
+    /// Source output slot doesn't exist
+    NoSourceSlot,
+    /// Sink input slot doesn't exist
+    NoSinkSlot,
+    /// Types are incompatible (cannot cast source to sink)
+    Incompatible,
+}
+
 impl Node {
     pub fn new(operation: Box<dyn Operation>, id: NodeId) -> Self {
         Self {
@@ -97,11 +108,11 @@ impl Node {
         self.dirty.get()
     }
 
-    pub fn clear_dirty(&self) {
+    fn clear_dirty(&self) {
         self.dirty.clear();
     }
 
-    pub fn mark_dirty(&self) {
+    fn mark_dirty(&self) {
         self.dirty.set();
     }
 
@@ -110,36 +121,37 @@ impl Node {
         self.dirty.clone()
     }
 
-    pub fn config_slot_count(&self) -> usize {
-        self.record.config_values.len()
+    /// Check if this node's output can connect to another node's input.
+    /// Only validates slot existence and type compatibility.
+    pub fn probe_connect(&self, other: &Node, from_port: usize, to_port: usize) -> ConnectionProbe {
+        let Some(output_def) = self.signature.output(from_port) else {
+            return ConnectionProbe::NoSourceSlot;
+        };
+
+        let Some(input_def) = other.signature.input(to_port) else {
+            return ConnectionProbe::NoSinkSlot;
+        };
+
+        if !output_def.value_type.can_cast_to(&input_def.value_type) {
+            return ConnectionProbe::Incompatible;
+        }
+
+        ConnectionProbe::Ok
     }
 
-    pub fn input_slot_count(&self) -> usize {
-        self.record.input_values.len()
-    }
-
-    pub fn output_slot_count(&self) -> usize {
-        self.output_values.len()
-    }
-
-    /// Alias for input_slot_count (test compatibility)
-    pub fn input_count(&self) -> usize {
-        self.signature.input_count()
-    }
-
-    /// Alias for output_slot_count (test compatibility)
-    pub fn output_count(&self) -> usize {
-        self.signature.output_count()
-    }
-
-    /// Get an input value by index
-    pub fn input_value(&self, index: usize) -> Option<&Value> {
-        self.record.input_values.get(index)
+    /// Get the signature for read access
+    pub fn signature(&self) -> &SignatureRegistery {
+        &self.signature
     }
 }
 
 // Value access
 impl Node {
+    /// Get read access to an input value
+    pub fn input_value(&self, index: usize) -> Option<&Value> {
+        self.record.input_values.get(index)
+    }
+
     /// Get mutable access to an input value
     pub fn input_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
         self.record.input_values.get_mut(index).map(Value::as_mut)
@@ -148,6 +160,16 @@ impl Node {
     /// Get mutable access to a config value
     pub fn config_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
         self.record.config_values.get_mut(index).map(Value::as_mut)
+    }
+
+    /// Number of input slots
+    pub fn input_count(&self) -> usize {
+        self.signature.input_count()
+    }
+
+    /// Number of output slots
+    pub fn output_count(&self) -> usize {
+        self.signature.output_count()
     }
 }
 

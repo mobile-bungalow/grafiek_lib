@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
 
-/// Maximum number of input/output slots per node
 pub const MAX_SLOTS: usize = 32;
 
 #[derive(Error, Debug)]
@@ -123,88 +122,62 @@ macro_rules! define_value_enum {
             fn value_type() -> ValueType;
         }
 
-        // Impls for Copy types
-        $(
-            impl From<$copy_ty> for Value {
-                fn from(v: $copy_ty) -> Self {
-                    Value::$copy_variant(v)
-                }
-            }
-
-            impl AsValueType for $copy_ty {
-                fn value_type() -> ValueType {
-                    ValueType::$copy_variant
-                }
-            }
-
-            impl<'a> TryFrom<&'a mut Value> for &'a mut $copy_ty {
-                type Error = ValueError;
-                fn try_from(v: &'a mut Value) -> Result<Self, Self::Error> {
-                    let Value::$copy_variant(v) = v else {
-                        return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$copy_ty>::value_type()),
-                            found: format!("{:?}", v),
-                        });
-                    };
-                    Ok(v)
-                }
-            }
-
-            impl<'a> TryFrom<&'a Value> for &'a $copy_ty {
-                type Error = ValueError;
-                fn try_from(v: &'a Value) -> Result<Self, Self::Error> {
-                    let Value::$copy_variant(v) = v else {
-                        return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$copy_ty>::value_type()),
-                            found: format!("{:?}", v),
-                        });
-                    };
-                    Ok(v)
-                }
-            }
-        )*
-
-        // Impls for Clone types
-        $(
-            impl From<$clone_ty> for Value {
-                fn from(v: $clone_ty) -> Self {
-                    Value::$clone_variant(v)
-                }
-            }
-
-            impl AsValueType for $clone_ty {
-                fn value_type() -> ValueType {
-                    ValueType::$clone_variant
-                }
-            }
-
-            impl<'a> TryFrom<&'a mut Value> for &'a mut $clone_ty {
-                type Error = ValueError;
-                fn try_from(v: &'a mut Value) -> Result<Self, Self::Error> {
-                    let Value::$clone_variant(v) = v else {
-                        return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$clone_ty>::value_type()),
-                            found: format!("{:?}", v),
-                        });
-                    };
-                    Ok(v)
-                }
-            }
-
-            impl<'a> TryFrom<&'a Value> for &'a $clone_ty {
-                type Error = ValueError;
-                fn try_from(v: &'a Value) -> Result<Self, Self::Error> {
-                    let Value::$clone_variant(v) = v else {
-                        return Err(ValueError::TypeMismatch {
-                            wanted: format!("{:?}", <$clone_ty>::value_type()),
-                            found: format!("{:?}", v),
-                        });
-                    };
-                    Ok(v)
-                }
-            }
-        )*
+        // Generate trait impls for all types
+        $( define_value_enum!(@impl_traits $copy_variant, $copy_ty); )*
+        $( define_value_enum!(@impl_traits $clone_variant, $clone_ty); )*
     };
+
+    // Internal rule for trait implementations (shared by copy and clone types)
+    (@impl_traits $variant:ident, $ty:ty) => {
+        impl From<$ty> for Value {
+            fn from(v: $ty) -> Self {
+                Value::$variant(v)
+            }
+        }
+
+        impl AsValueType for $ty {
+            fn value_type() -> ValueType {
+                ValueType::$variant
+            }
+        }
+
+        impl<'a> TryFrom<&'a mut Value> for &'a mut $ty {
+            type Error = ValueError;
+            fn try_from(v: &'a mut Value) -> Result<Self, Self::Error> {
+                let Value::$variant(v) = v else {
+                    return Err(ValueError::TypeMismatch {
+                        wanted: format!("{:?}", <$ty>::value_type()),
+                        found: format!("{:?}", v),
+                    });
+                };
+                Ok(v)
+            }
+        }
+
+        impl<'a> TryFrom<&'a Value> for &'a $ty {
+            type Error = ValueError;
+            fn try_from(v: &'a Value) -> Result<Self, Self::Error> {
+                let Value::$variant(v) = v else {
+                    return Err(ValueError::TypeMismatch {
+                        wanted: format!("{:?}", <$ty>::value_type()),
+                        found: format!("{:?}", v),
+                    });
+                };
+                Ok(v)
+            }
+        }
+    };
+}
+
+define_value_enum! {
+    copy {
+        I32: i32,
+        F32: f32,
+        Texture: TextureHandle,
+    }
+    clone {
+        String: GrafiekString,
+    }
 }
 
 /// Handle to a texture stored in the engine's texture pool.
@@ -290,17 +263,6 @@ impl Drop for StringGuard<'_> {
     }
 }
 
-define_value_enum! {
-    copy {
-        I32: i32,
-        F32: f32,
-        Texture: TextureHandle,
-    }
-    clone {
-        String: GrafiekString,
-    }
-}
-
 impl ValueType {
     /// Check if this type matches another type, considering Any as a wildcard
     pub fn matches(&self, other: &ValueType) -> bool {
@@ -309,31 +271,51 @@ impl ValueType {
             _ => self == other,
         }
     }
+
+    /// Check if a value of this type can be cast to the target type.
+    /// This mirrors the cast rules in Value::cast.
+    pub fn can_cast_to(&self, target: &ValueType) -> bool {
+        match (self, target) {
+            (_, ValueType::Any) => true,
+            (ValueType::Any, _) => true,
+            (a, b) if a == b => true,
+            (ValueType::I32, ValueType::F32) => true,
+            (ValueType::F32, ValueType::I32) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Value {
-    /// Cast this value to the target type
-    /// Returns None if the cast is not supported
-    pub fn cast(&self, ty: &ValueType) -> Option<Value> {
-        match (self, ty) {
-            // Null can never be passed as an argument to anything, even Any types
-            // So it's appropriate to fail cast here
-            (Value::Null(_), _) => None,
-            (_, ValueType::Any) => Some(self.clone()),
-            // Identity casts
-            (Value::I32(_), ValueType::I32)
-            | (Value::F32(_), ValueType::F32)
-            | (Value::Texture(_), ValueType::Texture) => Some(self.clone()),
-            // Numeric conversions
-            (Value::I32(i), ValueType::F32) => Some(Value::F32(*i as f32)),
-            (Value::F32(f), ValueType::I32) => Some(Value::I32(f.trunc() as i32)),
-            // Texture cannot be cast to/from numeric types
-            _ => None,
+    /// Cast this value to the target type.
+    /// Returns None if the cast is not supported.
+    pub fn cast(&self, target: &ValueType) -> Option<Value> {
+        // Null can never be cast to anything
+        if matches!(self, Value::Null(_)) {
+            return None;
         }
+
+        // Check type compatibility first
+        if !self.discriminant().can_cast_to(target) {
+            return None;
+        }
+
+        // Perform the actual conversion
+        Some(match (self, target) {
+            (_, ValueType::Any) => self.clone(),
+            (Value::I32(i), ValueType::F32) => Value::F32(*i as f32),
+            (Value::F32(f), ValueType::I32) => Value::I32(f.trunc() as i32),
+            // Identity cast - type already matches
+            _ => self.clone(),
+        })
     }
 
     pub fn can_cast_to(&self, ty: &ValueType) -> bool {
-        self.cast(ty).is_some()
+        // Null is a special case that can_cast_to on ValueType doesn't handle
+        if matches!(self, Value::Null(_)) {
+            return false;
+        }
+        self.discriminant().can_cast_to(ty)
     }
 }
 

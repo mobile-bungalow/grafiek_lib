@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::history::{Event, History, Message, Mutation};
-use crate::node::{Node, NodeId};
-use crate::ops::{self, Input};
+use crate::node::{ConnectionProbe, Node, NodeId};
+use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::{SlotDef, Value, ValueMut};
 use petgraph::prelude::*;
@@ -120,6 +120,12 @@ impl Engine {
         Ok(index)
     }
 
+    /// Connect an output slot of one node to an input slot of another.
+    ///
+    /// If the target input already has a connection, it will be replaced
+    /// and a `Disconnect` mutation will be emitted before the `Connect`.
+    ///
+    /// Emits: [`Mutation::Disconnect`] (if replacing), [`Mutation::Connect`]
     pub fn connect(
         &mut self,
         from: NodeIndex,
@@ -127,7 +133,69 @@ impl Engine {
         from_slot: usize,
         to_slot: usize,
     ) -> Result<(), Error> {
-        todo!("connect")
+        // Validate nodes exist and check type compatibility
+        let from_node = self
+            .graph
+            .node_weight(from)
+            .ok_or_else(|| Error::NodeNotFound(format!("Source node {:?}", from)))?;
+
+        let to_node = self
+            .graph
+            .node_weight(to)
+            .ok_or_else(|| Error::NodeNotFound(format!("Target node {:?}", to)))?;
+
+        match from_node.probe_connect(to_node, from_slot, to_slot) {
+            ConnectionProbe::Ok => {}
+            ConnectionProbe::NoSourceSlot => {
+                return Err(Error::NoOutputSlot(from_slot));
+            }
+            ConnectionProbe::NoSinkSlot => {
+                return Err(Error::NoInputSlot(to_slot));
+            }
+            ConnectionProbe::Incompatible => {
+                return Err(Error::IncompatibleTypes { from_slot, to_slot });
+            }
+        }
+
+        // Check for existing edge on target input slot and remove if present
+        let existing_edge = self
+            .graph
+            .edges_directed(to, Direction::Incoming)
+            .find(|e| e.weight().sink_slot == to_slot);
+
+        if let Some(edge) = existing_edge {
+            let old_from = edge.source();
+            let old_from_slot = edge.weight().source_slot;
+            let edge_id = edge.id();
+
+            self.graph.remove_edge(edge_id);
+
+            self.emit(Mutation::Disconnect {
+                from_node: old_from,
+                from_slot: old_from_slot,
+                to_node: to,
+                to_slot,
+            });
+        }
+
+        // Add the new edge
+        self.graph.add_edge(
+            from,
+            to,
+            Edge {
+                source_slot: from_slot,
+                sink_slot: to_slot,
+            },
+        );
+
+        self.emit(Mutation::Connect {
+            from_node: from,
+            from_slot,
+            to_node: to,
+            to_slot,
+        });
+
+        Ok(())
     }
 
     pub fn node_count(&self) -> usize {
@@ -191,9 +259,26 @@ impl Engine {
         Ok(t)
     }
 
-    /// Get graph output value (from OutputOp nodes)
-    pub fn get_graph_output(&self, index: usize) -> Option<&Value> {
-        todo!("get_graph_output")
+    /// Get graph output value by index (from OutputOp nodes).
+    /// Index corresponds to the order Output nodes were added to the graph.
+    pub fn result(&self, index: usize) -> Option<&Value> {
+        self.output_nodes()
+            .nth(index)
+            .and_then(|n| n.input_value(0))
+    }
+
+    /// Iterate over all graph output values.
+    /// Returns values from all Output nodes in the order they were added.
+    pub fn results(&self) -> impl Iterator<Item = &Value> {
+        self.output_nodes().filter_map(|n| n.input_value(0))
+    }
+
+    /// Iterate over all Output nodes in the graph.
+    fn output_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.graph.node_weights().filter(|node| {
+            let rec = node.record();
+            rec.op_path.library == Output::LIBRARY && rec.op_path.operator == Output::OPERATOR
+        })
     }
 }
 

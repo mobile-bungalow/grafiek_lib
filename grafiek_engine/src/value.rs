@@ -67,6 +67,9 @@ macro_rules! define_value_enum {
             }
 
             /// Create a checkpoint for later comparison.
+            ///
+            /// TODO: we want to opt this into a different type later
+            /// As we may just store a length hash pair for heapy types
             pub fn checkpoint(&self) -> Value {
                 self.clone()
             }
@@ -285,6 +288,7 @@ impl fmt::Display for ValueType {
 pub type Inputs<'a> = ArrayVec<ValueRef<'a>, MAX_SLOTS>;
 pub type Outputs<'a> = ArrayVec<ValueMut<'a>, MAX_SLOTS>;
 
+// TODO: Alotta traits dude
 pub trait InputsExt {
     fn extract<T: Extract>(&self, index: usize) -> Result<T, ValueError>;
 }
@@ -296,6 +300,7 @@ impl InputsExt for Inputs<'_> {
     }
 }
 
+// TODO: Alotta traits dude
 pub trait OutputsExt {
     fn extract<T: ExtractMut>(&mut self, index: usize) -> Result<&mut T, ValueError>;
 }

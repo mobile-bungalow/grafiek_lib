@@ -29,6 +29,7 @@ impl Operation for Add {
     ) -> Result<()> {
         let a: f32 = inputs.extract(0)?;
         let b: f32 = inputs.extract(1)?;
+
         *outputs.extract::<f32>(0)? = a + b;
         Ok(())
     }

@@ -358,6 +358,13 @@ impl Engine {
         res.and_then(|_| Ok(()))
     }
 
+    /// Try to downcast a node's operation to a concrete type.
+    /// Returns None if the node doesn't exist or the operation is not of type T.
+    /// This is read-only and will not dirty the node.
+    pub fn operation<T: 'static>(&self, index: NodeIndex) -> Option<&T> {
+        self.graph.node_weight(index)?.operation()
+    }
+
     /// Get graph output value by index (from OutputOp nodes).
     /// Index corresponds to the order Output nodes were added to the graph.
     pub fn result(&self, index: usize) -> Option<&Value> {

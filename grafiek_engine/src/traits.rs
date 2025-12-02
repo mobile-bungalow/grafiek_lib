@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::error::Result;
 use crate::registry::{SignatureRegistery, SlotDef};
 use crate::value::{Inputs, Outputs};
@@ -14,7 +16,7 @@ use crate::{ExecutionContext, Value, ValueType};
 // 7.) Serialized to disk.
 // This trait should assist with most of these stages
 /// Dynamic operation trait that each node type implements
-pub trait Operation {
+pub trait Operation: Any {
     /// If your operation maintains state between calls it's important to note so! some applications
     /// might forbid anything except idempotent operations.
     fn is_stateful(&self) -> bool;

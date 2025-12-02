@@ -70,6 +70,7 @@ pub struct Node {
     record: NodeRecord,
     signature: SignatureRegistery,
     output_values: Vec<Value>,
+    /// these are None if there is no connected edge(s) to the corresponding slot
     incoming_input_values: Vec<Option<Value>>,
     operation: Box<dyn Operation>,
     dirty: DirtyFlag,
@@ -187,6 +188,13 @@ impl Node {
     /// Number of config slots
     pub fn config_count(&self) -> usize {
         self.signature.config_count()
+    }
+
+    /// Downcast the operation to a concrete type.
+    /// Returns None if the operation is not of type T.
+    pub fn operation<T: std::any::Any + 'static>(&self) -> Option<&T> {
+        let op: &dyn std::any::Any = self.operation.as_ref() as _;
+        op.downcast_ref::<T>()
     }
 }
 

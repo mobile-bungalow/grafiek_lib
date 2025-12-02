@@ -273,6 +273,27 @@ impl Engine {
         Ok(t)
     }
 
+    /// Edit all inputs on a node.
+    pub fn edit_all_node_inputs<F>(&mut self, index: NodeIndex, mut f: F) -> Result<(), Error>
+    where
+        F: FnMut(&SlotDef, ValueMut),
+    {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
+
+        let res: Result<(), _> = (0..node.input_count())
+            .map(|slot| node.edit_input(slot, &mut f))
+            .collect();
+
+        if node.is_dirty() {
+            self.emit(Event::GraphDirtied)
+        }
+
+        res.and_then(|_| Ok(()))
+    }
+
     /// Edit a node's input slot directly
     pub fn edit_node_input<F, T>(&mut self, index: NodeIndex, slot: usize, f: F) -> Result<T, Error>
     where
@@ -290,6 +311,51 @@ impl Engine {
         }
 
         Ok(t)
+    }
+
+    /// Edit a node's config slot directly.
+    pub fn edit_node_config<F, T>(
+        &mut self,
+        index: NodeIndex,
+        slot: usize,
+        f: F,
+    ) -> Result<T, Error>
+    where
+        F: FnOnce(&SlotDef, ValueMut) -> T,
+    {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
+
+        let t = node.edit_config(slot, f)?;
+
+        if node.is_dirty() {
+            self.emit(Event::GraphDirtied)
+        }
+
+        Ok(t)
+    }
+
+    /// Edit all config slots on a node.
+    pub fn edit_all_node_configs<F>(&mut self, index: NodeIndex, mut f: F) -> Result<(), Error>
+    where
+        F: FnMut(&SlotDef, ValueMut),
+    {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
+
+        let res: Result<(), _> = (0..node.config_count())
+            .map(|slot| node.edit_config(slot, &mut f))
+            .collect();
+
+        if node.is_dirty() {
+            self.emit(Event::GraphDirtied)
+        }
+
+        res.and_then(|_| Ok(()))
     }
 
     /// Get graph output value by index (from OutputOp nodes).

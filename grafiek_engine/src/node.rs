@@ -183,6 +183,11 @@ impl Node {
     pub fn output_count(&self) -> usize {
         self.signature.output_count()
     }
+
+    /// Number of config slots
+    pub fn config_count(&self) -> usize {
+        self.signature.config_count()
+    }
 }
 
 // Lifecycle

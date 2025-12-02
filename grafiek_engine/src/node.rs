@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -6,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::traits::{OpPath, Operation};
+use crate::value::{Inputs, Outputs};
 use crate::{ExecutionContext, SignatureRegistery, SlotDef, Value, ValueMut};
 
 /// Engine provided unique ID
@@ -70,13 +70,14 @@ pub struct Node {
     record: NodeRecord,
     signature: SignatureRegistery,
     output_values: Vec<Value>,
+    incoming_input_values: Vec<Option<Value>>,
     operation: Box<dyn Operation>,
     dirty: DirtyFlag,
 }
 
-/// Result of probing whether a connection is type-compatible.
-/// This only validates node-level concerns (slots and types).
-/// Graph-level concerns (existing edges) are handled by the Engine.
+/// Result of probing whether a connection is valid.
+/// Node-level concerns (slots and types) are checked by Node::probe_connect.
+/// Graph-level concerns (loops, existing edges) are checked by Engine::connect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionProbe {
     /// Connection is valid
@@ -87,6 +88,8 @@ pub enum ConnectionProbe {
     NoSinkSlot,
     /// Types are incompatible (cannot cast source to sink)
     Incompatible,
+    /// Connection would create a cycle in the graph
+    CreatesLoop,
 }
 
 impl Node {
@@ -95,6 +98,7 @@ impl Node {
             record: NodeRecord::new(id, operation.op_path()),
             signature: SignatureRegistery::default(),
             output_values: vec![],
+            incoming_input_values: vec![],
             operation,
             dirty: DirtyFlag::new(),
         }
@@ -145,15 +149,15 @@ impl Node {
     }
 }
 
-// Value access
+// record access
 impl Node {
     /// Get read access to an input value
-    pub fn input_value(&self, index: usize) -> Option<&Value> {
+    pub fn record_input_value(&self, index: usize) -> Option<&Value> {
         self.record.input_values.get(index)
     }
 
-    /// Get mutable access to an input value
-    pub fn input_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
+    /// Get mutable access to a constant input value
+    pub fn record_input_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
         self.record.input_values.get_mut(index).map(Value::as_mut)
     }
 
@@ -185,21 +189,27 @@ impl Node {
             .iter()
             .map(|s| s.value_type.default_value())
             .collect();
+
         self.record.config_values = self
             .signature
             .config
             .iter()
             .map(|s| s.value_type.default_value())
             .collect();
+
         self.output_values = self
             .signature
             .outputs
             .iter()
             .map(|s| s.value_type.default_value())
             .collect();
+
+        self.incoming_input_values = vec![None; self.input_count()];
     }
 
     /// Directly edit a stored constant value on this node
+    /// This edits records, if you have a connection into this node
+    /// that superscedes changes here
     pub fn edit_input<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
         F: FnOnce(&SlotDef, ValueMut) -> T,
@@ -209,6 +219,7 @@ impl Node {
             .input_values
             .get_mut(idx)
             .ok_or(Error::NoPort(idx))?;
+
         let checkpoint = slot.checkpoint();
         let slot_mut = slot.as_mut();
         let slot_def = self.signature.input(idx).ok_or(Error::NoPort(idx))?;
@@ -251,5 +262,51 @@ impl Node {
 
     pub fn teardown(&mut self, ctx: &mut ExecutionContext) {
         self.operation.teardown(ctx);
+    }
+}
+
+// Execution
+impl Node {
+    /// Push an incoming value from an upstream node into this node's input slot.
+    pub(crate) fn push_incoming(&mut self, slot: usize, value: Value) {
+        if let Some(incoming) = self.incoming_input_values.get_mut(slot) {
+            *incoming = Some(value);
+        }
+    }
+
+    /// Clear an incoming value (when edge is disconnected).
+    pub(crate) fn clear_incoming(&mut self, slot: usize) {
+        if let Some(incoming) = self.incoming_input_values.get_mut(slot) {
+            *incoming = None;
+        }
+    }
+
+    /// Get read access to an output value (for propagating to downstream nodes).
+    pub fn output_value(&self, index: usize) -> Option<&Value> {
+        self.output_values.get(index)
+    }
+
+    /// Execute this node's operation.
+    /// Builds inputs from incoming values (or falls back to record values),
+    /// then calls the operation's execute method.
+    pub fn execute(&mut self, ctx: &mut ExecutionContext) -> crate::error::Result<()> {
+        // Build inputs: use incoming value if present, otherwise fall back to record
+        let inputs: Inputs = self
+            .incoming_input_values
+            .iter()
+            .zip(self.record.input_values.iter())
+            .map(|(incoming, record)| incoming.as_ref().unwrap_or(record).as_ref())
+            .collect();
+
+        // Build mutable outputs
+        let outputs: Outputs = self.output_values.iter_mut().map(Value::as_mut).collect();
+
+        // Execute the operation
+        self.operation.execute(ctx, inputs, outputs)?;
+
+        // Clear dirty flag after successful execution
+        self.clear_dirty();
+
+        Ok(())
     }
 }

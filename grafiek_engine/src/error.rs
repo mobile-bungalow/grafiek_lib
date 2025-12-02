@@ -25,6 +25,9 @@ pub enum Error {
     #[error("Incompatible types: output slot {from_slot} cannot connect to input slot {to_slot}")]
     IncompatibleTypes { from_slot: usize, to_slot: usize },
 
+    #[error("Connection would create a cycle in the graph")]
+    CreatesLoop,
+
     #[error("Node accessed while modifying graph input was not an instance of core/input.")]
     NotInputNode,
 

@@ -7,6 +7,7 @@ use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::{SlotDef, Value, ValueMut};
 use petgraph::prelude::*;
+use petgraph::visit::Topo;
 use wgpu::{Device, Queue};
 
 #[derive(Debug, Clone)]
@@ -82,10 +83,7 @@ impl Engine {
         self.last_id.0 += 1;
         self.last_id.clone()
     }
-}
 
-// Graph construction
-impl Engine {
     /// Create a new node that was registered with [Engine::register_op], this includes all
     /// of the system operators that you have enabled.
     ///
@@ -155,6 +153,14 @@ impl Engine {
             ConnectionProbe::Incompatible => {
                 return Err(Error::IncompatibleTypes { from_slot, to_slot });
             }
+            ConnectionProbe::CreatesLoop => {
+                return Err(Error::CreatesLoop);
+            }
+        }
+
+        // Check if connection would create a cycle (is there a path from `to` to `from`?)
+        if petgraph::algo::has_path_connecting(&self.graph, to, from, None) {
+            return Err(Error::CreatesLoop);
         }
 
         // Check for existing edge on target input slot and remove if present
@@ -209,11 +215,7 @@ impl Engine {
     pub fn get_node(&self, index: NodeIndex) -> Option<&Node> {
         self.graph.node_weight(index)
     }
-}
 
-// Value editing
-impl Engine {
-    /// Edit a graph input (InputOp output value)
     pub fn edit_graph_input<F, T>(&mut self, index: NodeIndex, f: F) -> Result<T, Error>
     where
         F: FnOnce(&SlotDef, ValueMut) -> T,
@@ -248,8 +250,6 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let rec = node.record();
-
         let t = node.edit_input(slot, f)?;
 
         if node.is_dirty() {
@@ -264,13 +264,13 @@ impl Engine {
     pub fn result(&self, index: usize) -> Option<&Value> {
         self.output_nodes()
             .nth(index)
-            .and_then(|n| n.input_value(0))
+            .and_then(|n| n.record_input_value(0))
     }
 
     /// Iterate over all graph output values.
     /// Returns values from all Output nodes in the order they were added.
     pub fn results(&self) -> impl Iterator<Item = &Value> {
-        self.output_nodes().filter_map(|n| n.input_value(0))
+        self.output_nodes().filter_map(|n| n.record_input_value(0))
     }
 
     /// Iterate over all Output nodes in the graph.
@@ -280,12 +280,36 @@ impl Engine {
             rec.op_path.library == Output::LIBRARY && rec.op_path.operator == Output::OPERATOR
         })
     }
-}
 
-// Execution
-impl Engine {
+    /// Execute the graph in topological order.
+    /// Each node's outputs are pushed to downstream nodes before they execute.
     pub fn execute(&mut self) {
-        todo!("execute")
+        self.emit(Event::ExecutionStarted);
+
+        let mut topo = Topo::new(&self.graph);
+        while let Some(node) = topo.next(&self.graph) {
+            if let Err(e) = self.graph[node].execute(&mut self.exe_ctx) {
+                // TODO: emit error state here
+                log::error!("Node execution failed: {e}");
+            }
+
+            self.emit(Event::NodeExecuted { node });
+
+            let mut dependants = self
+                .graph
+                .neighbors_directed(node, Direction::Outgoing)
+                .detach();
+
+            while let Some((edge, dep)) = dependants.next(&self.graph) {
+                let edge = self.graph[edge].clone();
+                let value = self.graph[node].output_value(edge.source_slot).cloned();
+                if let Some(value) = value {
+                    self.graph[dep].push_incoming(edge.sink_slot, value);
+                }
+            }
+        }
+
+        self.emit(Event::ExecutionCompleted);
     }
 }
 

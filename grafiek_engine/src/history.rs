@@ -36,7 +36,7 @@ pub enum Event {
     /// Execution started
     ExecutionStarted,
     /// Execution completed
-    ExecutionCompleted { duration_ms: f64 },
+    ExecutionCompleted,
     /// A node was executed
     NodeExecuted { node: NodeIndex },
     /// Graph was marked dirty (needs re-execution)

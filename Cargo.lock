@@ -1440,6 +1440,7 @@ dependencies = [
  "arrayvec",
  "derive_more",
  "log",
+ "parameter_schema_derive",
  "petgraph",
  "pollster",
  "serde",

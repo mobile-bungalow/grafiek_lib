@@ -90,6 +90,18 @@ impl SignatureRegistery {
         self.config.len()
     }
 
+    pub fn clear_inputs(&mut self) {
+        self.inputs.clear();
+    }
+
+    pub fn clear_outputs(&mut self) {
+        self.inputs.clear();
+    }
+
+    pub fn clear_config(&mut self) {
+        self.config.clear();
+    }
+
     pub fn clear(&mut self) {
         self.inputs.clear();
         self.outputs.clear();

@@ -3,6 +3,17 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Data, DeriveInput, Field, Fields, parse_macro_input};
 
+fn crate_path() -> TokenStream2 {
+    let is_in_engine = std::env::var("CARGO_PKG_NAME")
+        .map(|n| n != "grafiek_engine")
+        .unwrap_or(true);
+    if is_in_engine {
+        quote!(grafiek_engine)
+    } else {
+        quote!(crate)
+    }
+}
+
 #[proc_macro_derive(EnumSchema)]
 pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -11,6 +22,7 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
         Data::Enum(data) => {
             let variants: Vec<_> = data.variants.iter().collect();
             let name = &input.ident;
+            let krate = crate_path();
 
             if variants.iter().any(|v| !matches!(v.fields, Fields::Unit)) {
                 return syn::Error::new_spanned(
@@ -23,12 +35,33 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
             let variant_names: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
 
             quote! {
-                impl grafiek_engine::traits::SchemaEnum for #name {
+                impl #krate::traits::SchemaEnum for #name {
                     const VARIANTS : &'static [(&str, i32)] = &[
                         #(
                             (stringify!(#variant_names), #name::#variant_names as i32),
                         )*
                     ];
+                }
+
+                impl #krate::Extract for #name {
+                   fn extract(value: #krate::ValueRef<'_>) -> std::result::Result<Self, #krate::ValueError> {
+                       match value {
+                           #krate::ValueRef::I32(v) => {
+                               match *v {
+                                   #(
+                                    i if #name::#variant_names as i32 == i => {
+                                        Ok(#name::#variant_names)
+                                    },
+                                   )*
+                                   _ => Err(#krate::ValueError::InvalidEnum)
+                               }
+                           },
+                           other => Err(#krate::ValueError::TypeMismatch {
+                               wanted: "i32".to_string(),
+                               found: format!("{:?}", other),
+                           }),
+                       }
+                   }
                 }
             }
             .into()
@@ -73,7 +106,11 @@ enum SchemaKind {
 }
 
 /// Generate the SlotDef expression for a field, incorporating any metadata attributes
-fn generate_slot_def(field: &Field, field_name_str: &str) -> syn::Result<TokenStream2> {
+fn generate_slot_def(
+    field: &Field,
+    field_name_str: &str,
+    krate: &TokenStream2,
+) -> syn::Result<TokenStream2> {
     let field_type = &field.ty;
 
     let meta_attribute = field.attrs.iter().find(|a| a.path().is_ident("meta"));
@@ -85,16 +122,16 @@ fn generate_slot_def(field: &Field, field_name_str: &str) -> syn::Result<TokenSt
     // find first meta.
     if let Some(meta_tokens) = meta_attribtue_args {
         Ok(quote! {
-            grafiek_engine::SlotDef::with_metadata(
-                <#field_type as grafiek_engine::AsValueType>::VALUE_TYPE,
+            #krate::SlotDef::with_metadata(
+                <#field_type as #krate::AsValueType>::VALUE_TYPE,
                 #field_name_str,
-                grafiek_engine::ExtendedMetadata::from(#meta_tokens),
+                #krate::ExtendedMetadata::from(#meta_tokens),
             )
         })
     } else {
         Ok(quote! {
-            grafiek_engine::SlotDef::new(
-                <#field_type as grafiek_engine::AsValueType>::VALUE_TYPE,
+            #krate::SlotDef::new(
+                <#field_type as #krate::AsValueType>::VALUE_TYPE,
                 #field_name_str,
             )
         })
@@ -103,6 +140,7 @@ fn generate_slot_def(field: &Field, field_name_str: &str) -> syn::Result<TokenSt
 
 fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<TokenStream> {
     let name = &input.ident;
+    let krate = crate_path();
 
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
@@ -132,13 +170,24 @@ fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<Token
     let slot_defs: Vec<TokenStream2> = fields
         .iter()
         .zip(field_name_strs.iter())
-        .map(|(field, name_str)| generate_slot_def(field, name_str))
+        .map(|(field, name_str)| generate_slot_def(field, name_str, &krate))
         .collect::<syn::Result<_>>()?;
 
+    let field_indices: Vec<_> = (0..field_names.len()).collect();
+
     let schema_impl = quote! {
-        impl grafiek_engine::traits::Schema for #name {
-            fn fields() -> Vec<grafiek_engine::SlotDef> {
+        impl #krate::traits::Schema for #name {
+            fn fields() -> Vec<#krate::SlotDef> {
                 vec![ #( #slot_defs, )* ]
+            }
+
+            fn try_extract(values: #krate::Config) -> #krate::error::Result<Self> {
+                use #krate::InputsExt;
+                Ok(Self {
+                    #(
+                        #field_names: values.extract(#field_indices)?,
+                    )*
+                })
             }
         }
     };
@@ -157,25 +206,22 @@ fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<Token
 
     let kind_impl = match kind {
         SchemaKind::Input => quote! {
-            impl grafiek_engine::traits::InputSchema for #name {
-                fn try_extract(inputs: grafiek_engine::Inputs) -> grafiek_engine::error::Result<Self> {
-                    todo!("try_extract not yet implemented")
-                }
-            }
+            impl #krate::traits::InputSchema for #name {}
         },
         SchemaKind::Output => quote! {
-            impl grafiek_engine::traits::OutputSchema for #name {
-                fn try_write(&self, mut outputs: grafiek_engine::Outputs) -> grafiek_engine::error::Result<()> {
+            impl #krate::traits::OutputSchema for #name {
+                fn try_write(&self, mut outputs: #krate::Outputs) -> #krate::error::Result<()> {
                     todo!("try_write not yet implemented")
                 }
             }
         },
         SchemaKind::Config => quote! {
-            impl grafiek_engine::traits::ConfigSchema for #name {}
+            impl #krate::traits::ConfigSchema for #name {}
         },
     };
 
     Ok(quote! {
+        use #krate::traits::Schema as _;
         #schema_impl
         #default_impl
         #kind_impl

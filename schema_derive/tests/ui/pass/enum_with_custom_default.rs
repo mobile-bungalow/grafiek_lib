@@ -1,6 +1,6 @@
 use parameter_schema_derive::EnumSchema;
 
-#[derive(EnumSchema)]
+#[derive(Clone, EnumSchema)]
 enum CustomDefault {
     A = 1,
     B = 2,

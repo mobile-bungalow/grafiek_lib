@@ -2,8 +2,8 @@ use std::any::Any;
 
 use crate::error::Result;
 use crate::registry::{SignatureRegistery, SlotDef};
-use crate::value::{Inputs, Outputs};
-use crate::{AsValueType, ExecutionContext, Value, ValueType};
+use crate::value::{Config, Inputs, Outputs};
+use crate::{AsValueType, ExecutionContext, ValueType};
 
 // Node lifecycle
 // 1.) Config and Inputs deserialized.
@@ -34,7 +34,7 @@ pub trait Operation: Any {
     /// Configure the operation based on config values
     /// Called after config values are updated to allow operation to reconfigure itself as well as directly
     /// after setup.
-    fn configure(&mut self, _config: &[Value], _registry: &mut SignatureRegistery) -> Result<()> {
+    fn configure(&mut self, _config: Config, _registry: &mut SignatureRegistery) -> Result<()> {
         Ok(())
     }
 
@@ -85,6 +85,7 @@ pub trait Operation: Any {
 
 pub trait Schema: Default {
     fn fields() -> Vec<SlotDef>;
+    fn try_extract(values: Config) -> Result<Self>;
 }
 
 pub trait OutputSchema: Schema {
@@ -103,8 +104,6 @@ pub trait InputSchema: Schema {
             registry.inputs.push(field);
         }
     }
-
-    fn try_extract(values: Inputs) -> Result<Self>;
 }
 
 pub trait ConfigSchema: Schema {

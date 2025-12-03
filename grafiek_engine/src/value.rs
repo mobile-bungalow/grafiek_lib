@@ -11,6 +11,9 @@ pub enum ValueError {
     #[error("Slot index {0} does not exist")]
     Index(usize),
 
+    #[error("Value Passed was not a valid cast to enum.")]
+    InvalidEnum,
+
     #[error("Type mismatch: wanted {wanted}, found {found}")]
     TypeMismatch { wanted: String, found: String },
 }
@@ -186,7 +189,7 @@ pub trait AsValueType {
     }
 }
 
-pub trait Extract: Sized + Copy {
+pub trait Extract: Sized + Clone {
     fn extract(value: ValueRef<'_>) -> Result<Self, ValueError>;
 }
 
@@ -287,12 +290,14 @@ impl fmt::Display for ValueType {
 
 pub type Inputs<'a> = ArrayVec<ValueRef<'a>, MAX_SLOTS>;
 pub type Outputs<'a> = ArrayVec<ValueMut<'a>, MAX_SLOTS>;
+pub type Config<'a> = ArrayVec<ValueRef<'a>, MAX_SLOTS>;
 
 // TODO: Alotta traits dude
 pub trait InputsExt {
     fn extract<T: Extract>(&self, index: usize) -> Result<T, ValueError>;
 }
 
+// This also implments it for Config
 impl InputsExt for Inputs<'_> {
     fn extract<T: Extract>(&self, index: usize) -> Result<T, ValueError> {
         let value = self.get(index).ok_or(ValueError::Index(index))?;

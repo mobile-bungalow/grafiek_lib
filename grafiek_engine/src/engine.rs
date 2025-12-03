@@ -66,7 +66,7 @@ impl Engine {
         log::info!("loading grafiek::core operators");
         out.register_op::<ops::Input>()?;
         out.register_op::<ops::Output>()?;
-        out.register_op::<ops::Add>()?;
+        out.register_op::<ops::Arithmetic>()?;
         Ok(out)
     }
 

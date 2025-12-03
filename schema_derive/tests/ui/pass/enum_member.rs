@@ -1,6 +1,6 @@
 use parameter_schema_derive::{ConfigSchema, EnumSchema};
 
-#[derive(Default, EnumSchema)]
+#[derive(Default, Clone, EnumSchema)]
 enum Enumeration {
     #[default]
     A = -1,

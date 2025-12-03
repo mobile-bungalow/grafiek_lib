@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::traits::{OpPath, Operation};
-use crate::value::{Inputs, Outputs};
+use crate::value::{Config, Inputs, Outputs};
 use crate::{ExecutionContext, SignatureRegistery, SlotDef, Value, ValueMut};
 
 /// Engine provided unique ID
@@ -277,8 +277,14 @@ impl Node {
     }
 
     pub fn configure(&mut self) -> crate::error::Result<()> {
-        self.operation
-            .configure(&self.record.config_values, &mut self.signature)
+        let config: Config = self
+            .record
+            .config_values
+            .iter()
+            .map(Value::as_ref)
+            .collect();
+
+        self.operation.configure(config, &mut self.signature)
     }
 
     pub fn teardown(&mut self, ctx: &mut ExecutionContext) {

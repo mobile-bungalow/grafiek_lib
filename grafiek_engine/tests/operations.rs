@@ -1,6 +1,6 @@
 mod common;
 
-use grafiek_engine::ops::{Add, Input, Output};
+use grafiek_engine::ops::{ArithOp, Arithmetic, Input, Output};
 use grafiek_engine::{Value, ValueMut};
 
 #[test]
@@ -26,7 +26,11 @@ fn add_with_graph_inputs() {
 
     let input_a = engine.add_node(Box::new(Input)).unwrap();
     let input_b = engine.add_node(Box::new(Input)).unwrap();
-    let add = engine.add_node(Box::new(Add)).unwrap();
+    let add = engine
+        .add_node(Box::new(Arithmetic {
+            operation: ArithOp::Add,
+        }))
+        .unwrap();
     let output = engine.add_node(Box::new(Output)).unwrap();
 
     engine.connect(input_a, add, 0, 0).unwrap();
@@ -68,7 +72,11 @@ fn add_with_graph_inputs() {
 fn add_with_node_inputs() {
     let mut engine = common::engine();
 
-    let add = engine.add_node(Box::new(Add)).unwrap();
+    let add = engine
+        .add_node(Box::new(Arithmetic {
+            operation: ArithOp::Add,
+        }))
+        .unwrap();
     let output = engine.add_node(Box::new(Output)).unwrap();
 
     engine.connect(add, output, 0, 0).unwrap();

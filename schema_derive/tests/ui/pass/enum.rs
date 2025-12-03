@@ -1,6 +1,6 @@
 use parameter_schema_derive::EnumSchema;
 
-#[derive(Default, EnumSchema)]
+#[derive(Default, Clone, EnumSchema)]
 enum NotAStruct {
     #[default]
     A = -1,

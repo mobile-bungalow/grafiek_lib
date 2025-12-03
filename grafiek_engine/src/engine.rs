@@ -331,7 +331,8 @@ impl Engine {
         let t = node.edit_config(slot, f)?;
 
         if node.is_dirty() {
-            self.emit(Event::GraphDirtied)
+            self.emit(Event::GraphDirtied);
+            self.reconfigure_node(index)?;
         }
 
         Ok(t)
@@ -352,10 +353,11 @@ impl Engine {
             .collect();
 
         if node.is_dirty() {
-            self.emit(Event::GraphDirtied)
+            self.emit(Event::GraphDirtied);
+            self.reconfigure_node(index)?;
         }
 
-        res.and_then(|_| Ok(()))
+        res
     }
 
     /// Try to downcast a node's operation to a concrete type.
@@ -478,5 +480,44 @@ impl Engine {
             .get(category)
             .into_iter()
             .flat_map(|m| m.keys().copied())
+    }
+}
+
+// Validation
+impl Engine {
+    /// Reconfigure a node and disconnect any edges invalidated by the new signature.
+    fn reconfigure_node(&mut self, index: NodeIndex) -> Result<(), Error> {
+        self.graph[index].configure()?;
+        self.disconnect_invalid_edges(index);
+        Ok(())
+    }
+
+    /// Check all edges connected to a node and disconnect any that are no longer valid.
+    fn disconnect_invalid_edges(&mut self, index: NodeIndex) {
+        // Collect edge info first to avoid borrow issues
+        let edges: Vec<_> = self
+            .graph
+            .edges(index)
+            .map(|e| (e.id(), e.source(), e.target(), e.weight().clone()))
+            .collect();
+
+        for (edge_id, from, to, weight) in edges {
+            let is_valid = self.graph[from].probe_connect(
+                &self.graph[to],
+                weight.source_slot,
+                weight.sink_slot,
+            ) == ConnectionProbe::Ok;
+
+            if !is_valid {
+                self.graph.remove_edge(edge_id);
+                self.graph[to].clear_incoming(weight.sink_slot);
+                self.emit(Mutation::Disconnect {
+                    from_node: from,
+                    from_slot: weight.source_slot,
+                    to_node: to,
+                    to_slot: weight.sink_slot,
+                });
+            }
+        }
     }
 }

@@ -359,8 +359,8 @@ impl Engine {
     }
 
     /// Try to downcast a node's operation to a concrete type.
-    /// Returns None if the node doesn't exist or the operation is not of type T.
-    /// This is read-only and will not dirty the node.
+    /// It's a bad idea to modify the interior of your Operator outside
+    /// of the node lifecycle!
     pub fn operation<T: 'static>(&self, index: NodeIndex) -> Option<&T> {
         self.graph.node_weight(index)?.operation()
     }

@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::error::Result;
 use crate::registry::{SignatureRegistery, SlotDef};
 use crate::value::{Inputs, Outputs};
-use crate::{ExecutionContext, Value, ValueType};
+use crate::{AsValueType, ExecutionContext, Value, ValueType};
 
 // Node lifecycle
 // 1.) Config and Inputs deserialized.
@@ -113,6 +113,20 @@ pub trait ConfigSchema: Schema {
             registry.config.push(field.clone());
         }
     }
+}
+
+/// You probably won't have to implement this by hand. Instead use the
+/// derive macro. Enums with const integer representations can be
+/// used as fields in structs which derive schema.
+pub trait SchemaEnum {
+    const VARIANTS: &'static [(&str, i32)];
+}
+
+impl<T> AsValueType for T
+where
+    T: SchemaEnum,
+{
+    const VALUE_TYPE: ValueType = ValueType::I32;
 }
 
 /// Unique identifier for an operation type.

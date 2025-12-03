@@ -193,7 +193,7 @@ impl Node {
     /// Downcast the operation to a concrete type.
     /// Returns None if the operation is not of type T.
     pub fn operation<T: std::any::Any + 'static>(&self) -> Option<&T> {
-        let op: &dyn std::any::Any = self.operation.as_ref() as _;
+        let op: &dyn std::any::Any = self.operation.as_ref();
         op.downcast_ref::<T>()
     }
 }

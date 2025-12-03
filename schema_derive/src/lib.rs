@@ -1,6 +1,42 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, parse_macro_input, punctuated::Punctuated};
+
+#[proc_macro_derive(SchemaEnum)]
+pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match &input.data {
+        Data::Enum(data) => {
+            let variants: Vec<_> = data.variants.iter().collect();
+            let name = &input.ident;
+
+            if variants.iter().any(|v| !matches!(v.fields, Fields::Unit)) {
+                return syn::Error::new_spanned(
+                    &input,
+                    "SchemaEnum can only be derived for enums with unit variants.",
+                )
+                .to_compile_error()
+                .into();
+            }
+            let variant_names: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
+
+            quote! {
+                impl grafiek_engine::traits::SchemaEnum for #name {
+                    const VARIANTS : &'static [(&str, i32)] = &[
+                        #(
+                            (stringify!(#variant_names), #name::#variant_names as i32),
+                        )*
+                    ];
+                }
+            }
+            .into()
+        }
+        _ => syn::Error::new_spanned(&input, "SchemaEnum can only be derived for enums.")
+            .to_compile_error()
+            .into(),
+    }
+}
 
 #[proc_macro_derive(InputSchema)]
 pub fn derive_input_schema(input: TokenStream) -> TokenStream {

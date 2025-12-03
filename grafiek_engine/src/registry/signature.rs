@@ -58,12 +58,24 @@ impl SignatureRegistery {
         self.inputs.get(index)
     }
 
+    pub fn input_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
+        self.inputs.get_mut(index)
+    }
+
     pub fn output(&self, index: usize) -> Option<&SlotDef> {
         self.outputs.get(index)
     }
 
+    pub fn output_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
+        self.outputs.get_mut(index)
+    }
+
     pub fn config(&self, index: usize) -> Option<&SlotDef> {
         self.config.get(index)
+    }
+
+    pub fn config_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
+        self.config.get_mut(index)
     }
 
     pub fn input_count(&self) -> usize {

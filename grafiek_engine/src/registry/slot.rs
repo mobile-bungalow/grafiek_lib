@@ -165,6 +165,36 @@ impl SlotDef {
             common: CommonMetadata::default(),
         }
     }
+
+    pub fn set_visible(&mut self, visible: bool) -> &mut Self {
+        self.common.visible = visible;
+        self
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) -> &mut Self {
+        self.common.enabled = enabled;
+        self
+    }
+
+    pub fn set_tooltip(&mut self, tooltip: impl Into<String>) -> &mut Self {
+        self.common.tooltip = tooltip.into();
+        self
+    }
+
+    pub fn set_label(&mut self, label: impl Into<Cow<'static, str>>) -> &mut Self {
+        self.name = label.into();
+        self
+    }
+
+    pub fn set_interactive(&mut self, interactive: bool) -> &mut Self {
+        self.common.interactive = interactive;
+        self
+    }
+
+    pub fn set_extended(&mut self, meta: impl Into<ExtendedMetadata>) -> &mut Self {
+        self.extended = meta.into();
+        self
+    }
 }
 
 pub struct SlotBuilder<'a, T> {

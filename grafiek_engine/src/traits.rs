@@ -84,13 +84,13 @@ pub trait Operation: Any {
 }
 
 pub trait Schema: Default {
-    const FIELDS: &'static [SlotDef];
+    fn fields() -> Vec<SlotDef>;
 }
 
 pub trait OutputSchema: Schema {
     fn register(registry: &mut SignatureRegistery) {
-        for field in Self::FIELDS {
-            registry.outputs.push(field.clone());
+        for field in Self::fields() {
+            registry.outputs.push(field);
         }
     }
 
@@ -99,8 +99,8 @@ pub trait OutputSchema: Schema {
 
 pub trait InputSchema: Schema {
     fn register(registry: &mut SignatureRegistery) {
-        for field in Self::FIELDS {
-            registry.inputs.push(field.clone());
+        for field in Self::fields() {
+            registry.inputs.push(field);
         }
     }
 
@@ -109,8 +109,8 @@ pub trait InputSchema: Schema {
 
 pub trait ConfigSchema: Schema {
     fn register(registry: &mut SignatureRegistery) {
-        for field in Self::FIELDS {
-            registry.config.push(field.clone());
+        for field in Self::fields() {
+            registry.config.push(field);
         }
     }
 }
@@ -118,7 +118,7 @@ pub trait ConfigSchema: Schema {
 /// You probably won't have to implement this by hand. Instead use the
 /// derive macro. Enums with const integer representations can be
 /// used as fields in structs which derive schema.
-pub trait SchemaEnum {
+pub trait SchemaEnum: Default {
     const VARIANTS: &'static [(&str, i32)];
 }
 

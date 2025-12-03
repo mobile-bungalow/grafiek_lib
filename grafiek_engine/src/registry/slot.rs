@@ -27,6 +27,17 @@ pub struct FloatRange {
     pub default: f32,
 }
 
+impl Default for FloatRange {
+    fn default() -> Self {
+        Self {
+            min: f32::MIN,
+            max: f32::MAX,
+            step: 1.0,
+            default: 0.0,
+        }
+    }
+}
+
 impl MetadataFor<f32> for FloatRange {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +65,17 @@ pub struct IntRange {
     pub default: i32,
 }
 
+impl Default for IntRange {
+    fn default() -> Self {
+        Self {
+            min: i32::MIN,
+            max: i32::MAX,
+            step: 1,
+            default: 0,
+        }
+    }
+}
+
 impl MetadataFor<i32> for IntRange {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,10 +97,15 @@ impl<T> MetadataFor<T> for Vec<u8> {}
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
 pub enum ExtendedMetadata {
     None,
+    #[from]
     FloatRange(FloatRange),
+    #[from]
     Angle(Angle),
+    #[from]
     IntRange(IntRange),
+    #[from]
     IntEnum(IntEnum),
+    #[from]
     Boolean(Boolean),
     #[from]
     Custom(Vec<u8>),

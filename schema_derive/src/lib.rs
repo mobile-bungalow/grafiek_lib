@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, parse_macro_input};
+use syn::{Data, DeriveInput, Field, Fields, parse_macro_input};
 
 #[proc_macro_derive(EnumSchema)]
 pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
@@ -22,12 +23,6 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
             let variant_names: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
 
             quote! {
-                const _: () = {
-                    // Require Default to be implemented
-                    fn _assert_default<T: Default>() {}
-                    fn _check() { _assert_default::<#name>(); }
-                };
-
                 impl grafiek_engine::traits::SchemaEnum for #name {
                     const VARIANTS : &'static [(&str, i32)] = &[
                         #(
@@ -44,7 +39,7 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(InputSchema)]
+#[proc_macro_derive(InputSchema, attributes(meta))]
 pub fn derive_input_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Input) {
@@ -53,7 +48,7 @@ pub fn derive_input_schema(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(OutputSchema)]
+#[proc_macro_derive(OutputSchema, attributes(meta))]
 pub fn derive_output_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Output) {
@@ -62,7 +57,7 @@ pub fn derive_output_schema(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(ConfigSchema)]
+#[proc_macro_derive(ConfigSchema, attributes(meta))]
 pub fn derive_config_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Config) {
@@ -75,6 +70,35 @@ enum SchemaKind {
     Input,
     Output,
     Config,
+}
+
+/// Generate the SlotDef expression for a field, incorporating any metadata attributes
+fn generate_slot_def(field: &Field, field_name_str: &str) -> syn::Result<TokenStream2> {
+    let field_type = &field.ty;
+
+    let meta_attribute = field.attrs.iter().find(|a| a.path().is_ident("meta"));
+
+    let meta_attribtue_args = meta_attribute
+        .map(|m| m.meta.require_list().map(|c| c.tokens.clone()))
+        .transpose()?;
+
+    // find first meta.
+    if let Some(meta_tokens) = meta_attribtue_args {
+        Ok(quote! {
+            grafiek_engine::SlotDef::with_metadata(
+                <#field_type as grafiek_engine::AsValueType>::VALUE_TYPE,
+                #field_name_str,
+                grafiek_engine::ExtendedMetadata::from(#meta_tokens),
+            )
+        })
+    } else {
+        Ok(quote! {
+            grafiek_engine::SlotDef::new(
+                <#field_type as grafiek_engine::AsValueType>::VALUE_TYPE,
+                #field_name_str,
+            )
+        })
+    }
 }
 
 fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<TokenStream> {
@@ -99,22 +123,23 @@ fn derive_schema_impl(input: DeriveInput, kind: SchemaKind) -> syn::Result<Token
     };
 
     let field_names: Vec<_> = fields.iter().map(|f| &f.ident).collect();
-    let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
+
     let field_name_strs: Vec<_> = field_names
         .iter()
         .map(|n| n.as_ref().unwrap().to_string())
         .collect();
 
+    let slot_defs: Vec<TokenStream2> = fields
+        .iter()
+        .zip(field_name_strs.iter())
+        .map(|(field, name_str)| generate_slot_def(field, name_str))
+        .collect::<syn::Result<_>>()?;
+
     let schema_impl = quote! {
         impl grafiek_engine::traits::Schema for #name {
-            const FIELDS: &'static [grafiek_engine::SlotDef] = &[
-                #(
-                    grafiek_engine::SlotDef::new(
-                        <#field_types as grafiek_engine::AsValueType>::VALUE_TYPE,
-                        #field_name_strs,
-                    ),
-                )*
-            ];
+            fn fields() -> Vec<grafiek_engine::SlotDef> {
+                vec![ #( #slot_defs, )* ]
+            }
         }
     };
 

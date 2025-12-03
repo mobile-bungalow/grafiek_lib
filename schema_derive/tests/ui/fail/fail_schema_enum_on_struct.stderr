@@ -1,0 +1,7 @@
+error: SchemaEnum can only be derived for enums.
+ --> tests/ui/fail/fail_schema_enum_on_struct.rs:4:1
+  |
+4 | / struct NotAnEnum {
+5 | |     field: i32,
+6 | | }
+  | |_^

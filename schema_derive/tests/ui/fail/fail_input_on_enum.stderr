@@ -1,0 +1,8 @@
+error: Schema can only be derived for structs
+ --> tests/ui/fail/fail_input_on_enum.rs:4:1
+  |
+4 | / enum NotAStruct {
+5 | |     A,
+6 | |     B,
+7 | | }
+  | |_^

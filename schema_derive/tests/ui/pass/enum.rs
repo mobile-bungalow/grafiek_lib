@@ -1,7 +1,8 @@
-use parameter_schema_derive::SchemaEnum;
+use parameter_schema_derive::EnumSchema;
 
-#[derive(SchemaEnum)]
+#[derive(Default, EnumSchema)]
 enum NotAStruct {
+    #[default]
     A = -1,
     B = 3,
 }

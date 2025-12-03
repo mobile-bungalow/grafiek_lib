@@ -1,0 +1,9 @@
+error: SchemaEnum can only be derived for enums with unit variants.
+ --> tests/ui/fail/fail_schema_enum_non_unit.rs:4:1
+  |
+4 | / enum HasData {
+5 | |     Unit,
+6 | |     Tuple(i32),
+7 | |     Struct { x: i32 },
+8 | | }
+  | |_^

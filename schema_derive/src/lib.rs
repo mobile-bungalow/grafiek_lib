@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, parse_macro_input, punctuated::Punctuated};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
-#[proc_macro_derive(SchemaEnum)]
+#[proc_macro_derive(EnumSchema)]
 pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -22,6 +22,12 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
             let variant_names: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
 
             quote! {
+                const _: () = {
+                    // Require Default to be implemented
+                    fn _assert_default<T: Default>() {}
+                    fn _check() { _assert_default::<#name>(); }
+                };
+
                 impl grafiek_engine::traits::SchemaEnum for #name {
                     const VARIANTS : &'static [(&str, i32)] = &[
                         #(

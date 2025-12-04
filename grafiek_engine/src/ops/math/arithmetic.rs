@@ -46,11 +46,10 @@ impl Operation for Arithmetic {
     }
 
     fn configure(&mut self, config: Config, registry: &mut SignatureRegistery) -> Result<()> {
-        registry.clear();
-        registry.add_output::<f32>("result").build();
         let cfg = AddConfig::try_extract(config)?;
-
         self.operation = cfg.operation;
+
+        registry.clear_inputs();
 
         match cfg.operation {
             ArithOp::Add | ArithOp::Multiply | ArithOp::Max | ArithOp::Min => {

@@ -19,4 +19,5 @@ pub use registry::*;
 pub use value::*;
 
 pub use parameter_schema_derive::{ConfigSchema, EnumSchema, InputSchema, OutputSchema};
+pub use petgraph::graph::{EdgeIndex, NodeIndex};
 pub use traits::Schema;

@@ -52,6 +52,18 @@ impl SnarlState {
 }
 
 impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
+    fn draw_background(
+        &mut self,
+        _background: Option<&egui_snarl::ui::BackgroundPattern>,
+        viewport: &egui::Rect,
+        _snarl_style: &egui_snarl::ui::SnarlStyle,
+        style: &egui::Style,
+        painter: &egui::Painter,
+        _snarl: &Snarl<NodeData>,
+    ) {
+        self.view.snarl_ui.viewport = *viewport;
+        background::draw_grid(viewport, style, painter);
+    }
     fn title(&mut self, node: &NodeData) -> String {
         let idx = node.engine_node;
         self.engine

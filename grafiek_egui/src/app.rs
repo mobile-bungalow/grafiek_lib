@@ -3,7 +3,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use anyhow::Result;
 use egui_notify::Toasts;
 use egui_snarl::Snarl;
-use grafiek_engine::history::{Message, Mutation};
+use grafiek_engine::history::{Event, Message, Mutation};
 use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
 use wgpu::{Device, Queue};
 
@@ -65,15 +65,20 @@ impl GrafiekApp {
     }
 
     /// Process engine messages to sync snarl state
-    fn process_messages(&mut self) {
+    fn process_messages(&mut self) -> bool {
+        let mut out = false;
         while let Ok(msg) = self.message_rx.try_recv() {
             match msg {
                 Message::Mutation(mutation) => self.handle_mutation(mutation),
                 Message::Event(event) => {
                     log::debug!("Engine event: {:?}", event);
+                    if let Event::GraphDirtied = event {
+                        out = true;
+                    }
                 }
             }
         }
+        out
     }
 
     fn handle_mutation(&mut self, mutation: Mutation) {
@@ -173,7 +178,10 @@ impl eframe::App for GrafiekApp {
             self.snarl.show(view, &snarl::style(), "snarl", ui);
         });
 
-        // Process engine messages to sync snarl state
-        self.process_messages();
+        let dirty = self.process_messages();
+
+        if dirty {
+            self.engine.execute();
+        }
     }
 }

@@ -99,7 +99,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             if let Some(node) = self.engine.get_node(snarl_node.engine_node) {
                 let lib = node.record().op_path.library.as_str();
                 let header_color = match lib {
-                    "core" => egui::Color32::from_rgb(50, 120, 80),
+                    "core" => egui::Color32::from_rgb(50, 88, 80),
                     "math" => egui::Color32::from_rgb(60, 82, 130),
                     _ => egui::Color32::from_rgb(60, 80, 100),
                 };
@@ -159,13 +159,16 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let node = &snarl[pin.id.node];
         let idx = node.engine_node;
         let slot_idx = pin.id.input;
+        let connected = !pin.remotes.is_empty();
 
         let _ = self
             .engine
             .edit_node_input(idx, slot_idx, |slot_def, value| {
                 ui.horizontal(|ui| {
                     ui.label(slot_def.name.as_ref());
-                    crate::components::value::value_editor(ui, slot_def, value);
+                    if !connected {
+                        crate::components::value::value_editor(ui, slot_def, value);
+                    }
                 });
             });
 

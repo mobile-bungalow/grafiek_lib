@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use grafiek_engine::history::{Event, Message};
 use grafiek_engine::ops::{Input, InputType};
-use grafiek_engine::{Engine, EngineDescriptor, ValueMut, ValueType};
+use grafiek_engine::{Engine, EngineDescriptor, ValueMut};
 
 struct TestMessages {
     rx: Receiver<Message>,

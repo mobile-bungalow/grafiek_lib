@@ -274,6 +274,24 @@ impl Engine {
         self.graph.node_weight(index)
     }
 
+    pub fn inputs(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.graph.node_indices().filter(|&idx| {
+            self.graph
+                .node_weight(idx)
+                .map(|n| n.operation::<crate::ops::Input>().is_some())
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn outputs(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.graph.node_indices().filter(|&idx| {
+            self.graph
+                .node_weight(idx)
+                .map(|n| n.operation::<crate::ops::Output>().is_some())
+                .unwrap_or_default()
+        })
+    }
+
     pub fn edit_graph_input<F, T>(&mut self, index: NodeIndex, f: F) -> Result<T, Error>
     where
         F: FnOnce(&SlotDef, ValueMut) -> T,
@@ -292,7 +310,7 @@ impl Engine {
         let t = node.edit_output(0, f)?;
 
         if node.is_dirty() {
-            self.emit(Event::GraphDirtied)
+            self.emit(Event::GraphDirtied);
         }
 
         Ok(t)
@@ -450,11 +468,25 @@ impl Engine {
 impl Engine {
     fn emit<T: Into<Message>>(&mut self, message: T) {
         let message = message.into();
+
+        let dirties_graph = match &message {
+            Message::Mutation(m) => m.dirties_graph(),
+            Message::Event(_) => false,
+        };
+
         if let Message::Mutation(ref m) = message {
             self.history.push(m.clone());
         }
+
         if let Some(ref mut handler) = self.on_message {
             handler(message);
+        }
+
+        // Trailt messages with GraphDirtied if they mutated state
+        if dirties_graph {
+            if let Some(ref mut handler) = self.on_message {
+                handler(Message::Event(Event::GraphDirtied));
+            }
         }
     }
 

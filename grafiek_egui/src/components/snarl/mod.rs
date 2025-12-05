@@ -98,11 +98,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         if let Some(snarl_node) = snarl.get_node(node) {
             if let Some(node) = self.engine.get_node(snarl_node.engine_node) {
                 let lib = node.record().op_path.library.as_str();
-                let header_color = match lib {
-                    "core" => egui::Color32::from_rgb(50, 88, 80),
-                    "math" => egui::Color32::from_rgb(60, 82, 130),
-                    _ => egui::Color32::from_rgb(60, 80, 100),
-                };
+                let header_color = crate::components::panels::minimap::node_color(lib);
 
                 return default.fill(header_color);
             }

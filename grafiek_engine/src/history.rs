@@ -132,6 +132,21 @@ impl Mutation {
         }
     }
 
+    /// Returns true if this mutation requires graph re-execution
+    pub fn dirties_graph(&self) -> bool {
+        match self {
+            Mutation::Connect { .. }
+            | Mutation::Disconnect { .. }
+            | Mutation::DeleteNode { .. }
+            | Mutation::SetConfig { .. }
+            | Mutation::SetInput { .. } => true,
+
+            Mutation::CreateNode { .. } | Mutation::MoveNode { .. } | Mutation::SetLabel { .. } => {
+                false
+            }
+        }
+    }
+
     /// Returns the inverse mutation for undo
     pub fn inverse(&self) -> Mutation {
         match self.clone() {

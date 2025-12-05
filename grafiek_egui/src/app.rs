@@ -10,6 +10,7 @@ use wgpu::{Device, Queue};
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
+    panels::{show_io_panel, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
 };
 
@@ -166,8 +167,10 @@ impl eframe::App for GrafiekApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Conditionally show close prompt on shutdown
         self.show_close_prompt(ctx);
+        self.handle_keypress(ctx);
 
-        MenuBar::show(ctx, &mut self.view_state);
+        let (menu_response, _actions) = MenuBar::show(ctx, &mut self.view_state);
+        let top_panel_height = menu_response.response.rect.height() * 2.0;
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let view = &mut SnarlView {
@@ -177,6 +180,17 @@ impl eframe::App for GrafiekApp {
 
             self.snarl.show(view, &snarl::style(), "snarl", ui);
         });
+
+        show_io_panel(
+            ctx,
+            &mut self.engine,
+            &mut self.view_state.show_io,
+            top_panel_height,
+        );
+
+        if self.view_state.show_minimap {
+            show_minimap(ctx, &self.engine, &self.snarl);
+        }
 
         let dirty = self.process_messages();
 

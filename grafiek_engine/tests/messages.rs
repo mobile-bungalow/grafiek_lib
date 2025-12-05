@@ -91,3 +91,46 @@ fn input_node_no_dirty_when_value_unchanged() {
     let msgs = messages.drain();
     assert!(msgs.is_empty(), "Expected no messages, got {:?}", msgs);
 }
+
+#[test]
+fn connect_emits_dirty() {
+    use grafiek_engine::ops::{ArithOp, Arithmetic};
+
+    let (device, queue) = common::setup_wgpu();
+    let (messages, tx) = TestMessages::new();
+
+    let mut engine = Engine::init(EngineDescriptor {
+        device,
+        queue,
+        on_message: Some(Box::new(move |msg| {
+            tx.send(msg).unwrap();
+        })),
+    })
+    .unwrap();
+
+    let input = engine
+        .add_node(Box::new(Input {
+            value_type: InputType::Float,
+        }))
+        .unwrap();
+
+    let add = engine
+        .add_node(Box::new(Arithmetic {
+            operation: ArithOp::Add,
+        }))
+        .unwrap();
+
+    messages.clear();
+
+    engine.connect(input, add, 0, 0).unwrap();
+
+    let msgs = messages.drain();
+
+    // Should have Connect mutation and GraphDirtied event
+    assert!(
+        msgs.iter()
+            .any(|m| matches!(m, Message::Event(Event::GraphDirtied))),
+        "Expected GraphDirtied event, got {:?}",
+        msgs
+    );
+}

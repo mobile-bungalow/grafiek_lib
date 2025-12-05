@@ -113,6 +113,13 @@ impl Node {
         &mut self.record
     }
 
+    pub fn label(&self) -> &str {
+        self.record
+            .label
+            .as_deref()
+            .unwrap_or(&self.record.op_path.operator)
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty.get()
     }
@@ -309,7 +316,16 @@ impl Node {
             .map(Value::as_ref)
             .collect();
 
-        self.operation.configure(config, &mut self.signature)
+        self.operation.configure(config, &mut self.signature)?;
+
+        self.output_values = self
+            .signature
+            .outputs
+            .iter()
+            .map(|s| s.value_type.default_value())
+            .collect();
+
+        Ok(())
     }
 
     pub fn teardown(&mut self, ctx: &mut ExecutionContext) {

@@ -34,6 +34,7 @@ pub enum ArithOp {
 #[derive(ConfigSchema)]
 struct AddConfig {
     #[label("")]
+    #[on_node_body]
     operation: ArithOp,
 }
 

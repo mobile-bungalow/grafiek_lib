@@ -131,18 +131,28 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .unwrap_or(0);
 
         for slot_idx in 0..config_count {
-            let _ = self
-                .engine
-                .edit_node_config(idx, slot_idx, |slot_def, value| {
-                    ui.vertical(|ui| {
-                        ui.add_space(10.0);
+            let mut first = true;
+            ui.vertical(|ui| {
+                let _ = self
+                    .engine
+                    .edit_node_config(idx, slot_idx, |slot_def, value| {
+                        if !slot_def.common.on_node_body {
+                            return;
+                        }
+
+                        if first {
+                            ui.add_space(10.0);
+                            first = false;
+                        }
+
                         ui.horizontal(|ui| {
                             ui.label(slot_def.name.as_ref());
                             crate::components::value::value_editor(ui, slot_def, value);
                         });
+
                         ui.add_space(10.0);
                     });
-                });
+            });
         }
     }
 
@@ -201,6 +211,31 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         true
     }
 
+    fn has_node_menu(&mut self, _node: &NodeData) -> bool {
+        true
+    }
+
+    fn show_node_menu(
+        &mut self,
+        node: egui_snarl::NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        ui: &mut egui::Ui,
+        snarl: &mut Snarl<NodeData>,
+    ) {
+        let Some(data) = snarl.get_node(node) else {
+            return;
+        };
+
+        if ui.button("Delete").clicked() {
+            let _ = self.engine.delete_node(data.engine_node);
+        }
+
+        if ui.button("Copy").clicked() {}
+
+        if ui.button("Cut").clicked() {}
+    }
+
     fn show_graph_menu(
         &mut self,
         pos: egui::Pos2,
@@ -218,7 +253,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             ui.menu_button(category, |ui| {
                 for operator in operators {
                     if ui.button(operator).clicked() {
-                        // Store position for message handler to use
                         ui.close();
                         picked = Some((pos, category, operator));
                     }
@@ -242,7 +276,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let from_node = snarl[from.id.node].engine_node;
         let to_node = snarl[to.id.node].engine_node;
 
-        // Call engine directly - it will emit Connect message
         if let Err(e) = self
             .engine
             .connect(from_node, to_node, from.id.output, to.id.input)
@@ -255,7 +288,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let from_node = snarl[from.id.node].engine_node;
         let to_node = snarl[to.id.node].engine_node;
 
-        // Call engine directly - it will emit Disconnect message
         if let Err(e) = self
             .engine
             .disconnect(from_node, to_node, from.id.output, to.id.input)

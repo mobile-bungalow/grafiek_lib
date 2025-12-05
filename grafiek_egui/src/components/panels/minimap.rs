@@ -1,8 +1,13 @@
-use egui::{Color32, Rect, Stroke, Vec2};
+use std::f32;
+
+use egui::{Color32, Pos2, Rect, Stroke, Vec2, pos2};
 use egui_snarl::Snarl;
 use grafiek_engine::Engine;
 
 use crate::components::snarl::NodeData;
+
+const MAP_PAD: f32 = 50.0;
+const NODE_SIZE: Vec2 = egui::vec2(150.0, 50.0);
 
 /// Get header color for a node based on its library
 pub fn node_color(lib: &str) -> Color32 {
@@ -13,9 +18,12 @@ pub fn node_color(lib: &str) -> Color32 {
     }
 }
 
-pub fn show_minimap(ctx: &egui::Context, engine: &Engine, snarl: &Snarl<NodeData>) {
-    let viewport_rect = ctx.input(|i| i.viewport_rect());
-
+pub fn show_minimap(
+    ctx: &egui::Context,
+    engine: &Engine,
+    snarl: &Snarl<NodeData>,
+    snarl_viewport: &Rect,
+) {
     egui::Window::new("Minimap")
         .fixed_pos(egui::pos2(
             ctx.viewport_rect().width() - 160.0,
@@ -31,46 +39,42 @@ pub fn show_minimap(ctx: &egui::Context, engine: &Engine, snarl: &Snarl<NodeData
 
             let minimap_rect = response.rect;
 
-            let mut min = viewport_rect.min;
-            let mut max = viewport_rect.max;
+            let min = snarl_viewport.min;
+            let max = snarl_viewport.max;
 
-            for (id, _) in snarl.node_ids() {
-                if let Some(info) = snarl.get_node_info(id) {
-                    let size = egui::vec2(150.0, 50.0);
-                    min = min.min(info.pos);
-                    max = max.max(info.pos + size);
-                }
-            }
+            let (mut min, mut max) = snarl.nodes_pos().fold((min, max), |(min, max), (pos, _)| {
+                let min = min.min(pos);
+                let max = max.max(pos + NODE_SIZE);
+                (min, max)
+            });
 
-            let padding = 50.0;
-            min -= Vec2::splat(padding);
-            max += Vec2::splat(padding);
+            min -= Vec2::splat(MAP_PAD);
+            max += Vec2::splat(MAP_PAD);
 
+            // assuming padding full wXh of the virtual space
             let world_size = max - min;
 
+            // How much we have to scale down to avoid cutting anything off
             let scale =
                 (minimap_rect.width() / world_size.x).min(minimap_rect.height() / world_size.y);
 
             painter.rect_filled(minimap_rect, 2.0, Color32::from_gray(20));
 
-            for (id, node_data) in snarl.node_ids() {
-                if let Some(info) = snarl.get_node_info(id) {
-                    let color = engine
-                        .get_node(node_data.engine_node)
-                        .map(|n| node_color(&n.record().op_path.library))
-                        .unwrap_or(Color32::from_rgb(80, 80, 100));
+            for node_data in snarl.nodes_info() {
+                let color = engine
+                    .get_node(node_data.value.engine_node)
+                    .map(|n| node_color(&n.record().op_path.library))
+                    .unwrap_or(Color32::from_rgb(80, 80, 100));
 
-                    let local_pos = (info.pos - min) * scale;
-                    let local_size = egui::vec2(150.0, 50.0) * scale;
+                let local_pos = (node_data.pos - min) * scale;
+                let local_size = NODE_SIZE * scale;
 
-                    let node_rect = Rect::from_min_size(minimap_rect.min + local_pos, local_size);
-                    painter.rect_filled(node_rect, 1.0, color);
-                }
+                let node_rect = Rect::from_min_size(minimap_rect.min + local_pos, local_size);
+                painter.rect_filled(node_rect, 1.0, color);
             }
 
-            // Draw viewport indicator
-            let viewport_min = (viewport_rect.min - min) * scale;
-            let viewport_size = viewport_rect.size() * scale;
+            let viewport_min = (snarl_viewport.min - min) * scale;
+            let viewport_size = snarl_viewport.size() * scale;
 
             let viewport_minimap =
                 Rect::from_min_size(minimap_rect.min + viewport_min, viewport_size);

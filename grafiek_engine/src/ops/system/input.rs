@@ -18,6 +18,7 @@ pub enum InputType {
 
 #[derive(ConfigSchema)]
 struct InputConfig {
+    #[on_node_body]
     #[label("type")]
     value_type: InputType,
 }

@@ -15,8 +15,14 @@ pub struct CommonMetadata {
     pub enabled: bool,
     // True if this piece of state should be hidden
     pub visible: bool,
+    // A ui hint indicating this should be shown in some kind of inspector
+    // or info panel as opposed to on the node body itself.
+    pub on_node_body: bool,
 }
 
+// A marker trait which prevents SlotDefs from
+// being defined for a [ValueType] for which the metadata
+// does not describe.
 pub trait MetadataFor<T> {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +155,7 @@ impl SlotDef {
                 interactive: false,
                 enabled: false,
                 visible: false,
+                on_node_body: false,
             },
         }
     }
@@ -173,6 +180,11 @@ impl SlotDef {
 
     pub fn set_enabled(&mut self, enabled: bool) -> &mut Self {
         self.common.enabled = enabled;
+        self
+    }
+
+    pub fn set_on_node_body(&mut self, on_node_body: bool) -> &mut Self {
+        self.common.on_node_body = on_node_body;
         self
     }
 

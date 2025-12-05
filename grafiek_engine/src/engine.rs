@@ -5,7 +5,7 @@ use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
-use crate::{SlotDef, Value, ValueMut};
+use crate::{SlotDef, TextureHandle, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue};
@@ -14,6 +14,7 @@ use wgpu::{Device, Queue};
 pub struct ExecutionContext {
     pub device: Device,
     pub queue: Queue,
+    texture_registry: HashMap<TextureHandle, wgpu::Texture>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +47,8 @@ pub struct Engine {
     on_message: Option<MessageHandler>,
     // The last issued NodeId
     last_id: NodeId,
+    // Mapping of texture owners
+    tex_owners: HashMap<TextureHandle, NodeIndex>,
 }
 
 // Initialization
@@ -58,9 +61,11 @@ impl Engine {
             exe_ctx: ExecutionContext {
                 device: desc.device,
                 queue: desc.queue,
+                texture_registry: HashMap::new(),
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
+            tex_owners: HashMap::new(),
         };
 
         log::info!("loading grafiek::core operators");
@@ -116,6 +121,35 @@ impl Engine {
         self.emit(Mutation::CreateNode { idx: index, record });
 
         Ok(index)
+    }
+    /// Delete a node
+    ///
+    /// emits [Mutation::DeleteNode]
+    pub fn delete_node(&mut self, index: NodeIndex) -> Result<(), Error> {
+        let edges = self.graph.edges(index);
+
+        let edges: Vec<_> = edges
+            .filter_map(|edge| {
+                let (from, to) = self.graph.edge_endpoints(edge.id())?;
+                let weight = edge.weight();
+                Some((from, to, weight.sink_slot, weight.source_slot))
+            })
+            .collect();
+
+        for (from, to, sink, source) in edges {
+            self.disconnect(from, to, sink, source)?;
+        }
+
+        let node = self.graph.remove_node(index);
+
+        if let Some(node) = node {
+            self.emit(Mutation::DeleteNode {
+                idx: index,
+                record: node.record().clone(),
+            });
+        }
+
+        Ok(())
     }
 
     /// Set a node's position.

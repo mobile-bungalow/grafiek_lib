@@ -189,7 +189,12 @@ impl eframe::App for GrafiekApp {
         );
 
         if self.view_state.show_minimap {
-            show_minimap(ctx, &self.engine, &self.snarl);
+            show_minimap(
+                ctx,
+                &self.engine,
+                &self.snarl,
+                &self.view_state.snarl_ui.viewport,
+            );
         }
 
         let dirty = self.process_messages();

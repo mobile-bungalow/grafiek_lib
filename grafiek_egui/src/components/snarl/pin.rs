@@ -42,8 +42,8 @@ impl SnarlPin for PinInfo {
         let y = (y0 + y1) * 0.5;
 
         let x_offset = match self.side {
-            Some(PinSide::Left) => -size * 0.5,
-            Some(PinSide::Right) => size * 0.5,
+            Some(PinSide::Left) => -size * 0.7,
+            Some(PinSide::Right) => size * 0.7,
             None => 0.0,
         };
 

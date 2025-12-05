@@ -2,9 +2,16 @@ use crate::ConfigSchema;
 use crate::EnumSchema;
 use crate::ExecutionContext;
 use crate::error::Result;
-use crate::registry::SignatureRegistery;
+use crate::registry::{FloatRange, SignatureRegistery};
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Config, Inputs, InputsExt, Outputs, OutputsExt};
+
+const F32_META: FloatRange = FloatRange {
+    min: f32::MIN,
+    max: f32::MAX,
+    step: 0.1,
+    default: 0.0,
+};
 
 pub struct Arithmetic {
     pub operation: ArithOp,
@@ -26,6 +33,7 @@ pub enum ArithOp {
 
 #[derive(ConfigSchema)]
 struct AddConfig {
+    #[label("")]
     operation: ArithOp,
 }
 
@@ -39,8 +47,8 @@ impl Operation for Arithmetic {
     }
 
     fn setup(&mut self, _ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
-        registry.add_input::<f32>("a").build();
-        registry.add_input::<f32>("b").build();
+        registry.add_input::<f32>("a").meta(F32_META).build();
+        registry.add_input::<f32>("b").meta(F32_META).build();
         registry.add_output::<f32>("result").build();
         registry.register_config::<AddConfig>();
     }
@@ -53,27 +61,30 @@ impl Operation for Arithmetic {
 
         match cfg.operation {
             ArithOp::Add | ArithOp::Multiply | ArithOp::Max | ArithOp::Min => {
-                registry.add_input::<f32>("a").build();
-                registry.add_input::<f32>("b").build();
+                registry.add_input::<f32>("a").meta(F32_META).build();
+                registry.add_input::<f32>("b").meta(F32_META).build();
             }
             ArithOp::Subtract => {
-                registry.add_input::<f32>("minuend").build();
-                registry.add_input::<f32>("subtrahend").build();
+                registry.add_input::<f32>("minuend").meta(F32_META).build();
+                registry
+                    .add_input::<f32>("subtrahend")
+                    .meta(F32_META)
+                    .build();
             }
             ArithOp::Power => {
-                registry.add_input::<f32>("base").build();
-                registry.add_input::<f32>("exponent").build();
+                registry.add_input::<f32>("base").meta(F32_META).build();
+                registry.add_input::<f32>("exponent").meta(F32_META).build();
             }
             ArithOp::Log => {
-                registry.add_input::<f32>("base").build();
-                registry.add_input::<f32>("a").build();
+                registry.add_input::<f32>("base").meta(F32_META).build();
+                registry.add_input::<f32>("a").meta(F32_META).build();
             }
             ArithOp::Divide => {
-                registry.add_input::<f32>("dividend").build();
-                registry.add_input::<f32>("divisor").build();
+                registry.add_input::<f32>("dividend").meta(F32_META).build();
+                registry.add_input::<f32>("divisor").meta(F32_META).build();
             }
             ArithOp::Abs => {
-                registry.add_input::<f32>("a").build();
+                registry.add_input::<f32>("a").meta(F32_META).build();
             }
         }
 
@@ -86,51 +97,34 @@ impl Operation for Arithmetic {
         inputs: Inputs,
         mut outputs: Outputs,
     ) -> Result<()> {
+        let a: f32 = inputs.extract(0)?;
+        let b: f32 = inputs.extract(1).unwrap_or(0.);
         match self.operation {
             ArithOp::Add => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a + b;
             }
             ArithOp::Subtract => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a - b;
             }
             ArithOp::Multiply => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a * b;
             }
             ArithOp::Power => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a.powf(b);
             }
             ArithOp::Log => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a.log(b);
             }
             ArithOp::Divide => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a / b;
             }
             ArithOp::Min => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a.min(b);
             }
             ArithOp::Max => {
-                let a: f32 = inputs.extract(0)?;
-                let b: f32 = inputs.extract(1)?;
                 *outputs.extract::<f32>(0)? = a.max(b);
             }
-            ArithOp::Abs => {
-                let a: f32 = inputs.extract(0)?;
-                *outputs.extract::<f32>(0)? = a.abs()
-            }
+            ArithOp::Abs => *outputs.extract::<f32>(0)? = a.abs(),
         }
 
         Ok(())
@@ -139,8 +133,8 @@ impl Operation for Arithmetic {
 
 impl OperationFactory for Arithmetic {
     const LIBRARY: &'static str = "math";
-    const OPERATOR: &'static str = "add";
-    const LABEL: &'static str = "Add";
+    const OPERATOR: &'static str = "arithmetic";
+    const LABEL: &'static str = "Arithmetic";
 
     fn build() -> Result<Box<dyn Operation>> {
         Ok(Box::new(Arithmetic {

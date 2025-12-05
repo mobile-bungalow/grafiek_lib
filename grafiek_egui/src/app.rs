@@ -1,12 +1,16 @@
+use std::sync::mpsc::{self, Receiver, Sender};
+
 use anyhow::Result;
 use egui_notify::Toasts;
 use egui_snarl::Snarl;
-use grafiek_engine::{Engine, NodeIndex};
+use grafiek_engine::history::{Message, Mutation};
+use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
+use wgpu::{Device, Queue};
 
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
-    snarl::{self, SnarlState, SnarlView, style},
+    snarl::{self, NodeData, SnarlState, SnarlView},
 };
 
 #[derive(Default)]
@@ -28,14 +32,27 @@ pub struct GrafiekApp {
     pub view_state: ViewState,
     /// snarl state - disjoint borrows in graph display
     pub snarl: Snarl<snarl::NodeData>,
+    /// Message receiver from engine
+    message_rx: Receiver<Message>,
 }
 
 impl GrafiekApp {
-    pub fn init(engine: Engine) -> Result<Self> {
+    pub fn init(device: Device, queue: Queue) -> Result<Self> {
+        let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
+
+        let engine = Engine::init(EngineDescriptor {
+            device,
+            queue,
+            on_message: Some(Box::new(move |msg| {
+                let _ = tx.send(msg);
+            })),
+        })?;
+
         Ok(Self {
             engine,
             view_state: Default::default(),
             snarl: Default::default(),
+            message_rx: rx,
         })
     }
 
@@ -45,6 +62,98 @@ impl GrafiekApp {
 
     pub fn save_project(&mut self) {
         // TODO: implement save logic
+    }
+
+    /// Process engine messages to sync snarl state
+    fn process_messages(&mut self) {
+        while let Ok(msg) = self.message_rx.try_recv() {
+            match msg {
+                Message::Mutation(mutation) => self.handle_mutation(mutation),
+                Message::Event(event) => {
+                    log::debug!("Engine event: {:?}", event);
+                }
+            }
+        }
+    }
+
+    fn handle_mutation(&mut self, mutation: Mutation) {
+        match mutation {
+            Mutation::CreateNode { idx, record } => {
+                let node_data = NodeData {
+                    op_type: record.op_path.operator.to_string(),
+                    engine_node: idx,
+                };
+
+                let position = egui::pos2(record.position.0, record.position.1);
+                let snarl_id = self.snarl.insert_node(position, node_data);
+                self.view_state
+                    .snarl_ui
+                    .engine_to_snarl
+                    .insert(idx, snarl_id);
+            }
+            Mutation::MoveNode {
+                node, new_position, ..
+            } => {
+                if let Some(&snarl_id) = self.view_state.snarl_ui.engine_to_snarl.get(&node) {
+                    if let Some(node_info) = self.snarl.get_node_info_mut(snarl_id) {
+                        node_info.pos = egui::pos2(new_position.0, new_position.1);
+                    }
+                }
+            }
+            Mutation::DeleteNode { idx, .. } => {
+                if let Some(snarl_id) = self.view_state.snarl_ui.engine_to_snarl.remove(&idx) {
+                    self.snarl.remove_node(snarl_id);
+                }
+            }
+            Mutation::Connect {
+                from_node,
+                from_slot,
+                to_node,
+                to_slot,
+            } => {
+                if let (Some(&from_snarl), Some(&to_snarl)) = (
+                    self.view_state.snarl_ui.engine_to_snarl.get(&from_node),
+                    self.view_state.snarl_ui.engine_to_snarl.get(&to_node),
+                ) {
+                    let out_pin = egui_snarl::OutPinId {
+                        node: from_snarl,
+                        output: from_slot,
+                    };
+
+                    let in_pin = egui_snarl::InPinId {
+                        node: to_snarl,
+                        input: to_slot,
+                    };
+
+                    self.snarl.connect(out_pin, in_pin);
+                }
+            }
+            Mutation::Disconnect {
+                from_node,
+                from_slot,
+                to_node,
+                to_slot,
+            } => {
+                if let (Some(&from_snarl), Some(&to_snarl)) = (
+                    self.view_state.snarl_ui.engine_to_snarl.get(&from_node),
+                    self.view_state.snarl_ui.engine_to_snarl.get(&to_node),
+                ) {
+                    let out_pin = egui_snarl::OutPinId {
+                        node: from_snarl,
+                        output: from_slot,
+                    };
+
+                    let in_pin = egui_snarl::InPinId {
+                        node: to_snarl,
+                        input: to_slot,
+                    };
+
+                    self.snarl.disconnect(out_pin, in_pin);
+                }
+            }
+            // These mutations don't require snarl sync
+            Mutation::SetConfig { .. } | Mutation::SetInput { .. } | Mutation::SetLabel { .. } => {}
+        }
     }
 }
 
@@ -63,5 +172,8 @@ impl eframe::App for GrafiekApp {
 
             self.snarl.show(view, &snarl::style(), "snarl", ui);
         });
+
+        // Process engine messages to sync snarl state
+        self.process_messages();
     }
 }

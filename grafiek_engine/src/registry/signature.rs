@@ -95,7 +95,7 @@ impl SignatureRegistery {
     }
 
     pub fn clear_outputs(&mut self) {
-        self.inputs.clear();
+        self.outputs.clear();
     }
 
     pub fn clear_config(&mut self) {

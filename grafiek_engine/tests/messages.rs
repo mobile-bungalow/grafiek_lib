@@ -3,8 +3,8 @@ mod common;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use grafiek_engine::history::{Event, Message};
-use grafiek_engine::ops::Input;
-use grafiek_engine::{Engine, EngineDescriptor, ValueMut};
+use grafiek_engine::ops::{Input, InputType};
+use grafiek_engine::{Engine, EngineDescriptor, ValueMut, ValueType};
 
 struct TestMessages {
     rx: Receiver<Message>,
@@ -39,7 +39,11 @@ fn input_node_emits_dirty_on_edit() {
     })
     .unwrap();
 
-    let input = engine.add_node(Box::new(Input)).unwrap();
+    let input = engine
+        .add_node(Box::new(Input {
+            value_type: InputType::Float,
+        }))
+        .unwrap();
     messages.clear();
 
     engine
@@ -69,7 +73,11 @@ fn input_node_no_dirty_when_value_unchanged() {
     })
     .unwrap();
 
-    let input = engine.add_node(Box::new(Input)).unwrap();
+    let input = engine
+        .add_node(Box::new(Input {
+            value_type: InputType::Float,
+        }))
+        .unwrap();
     messages.clear();
 
     engine

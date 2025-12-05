@@ -126,6 +126,16 @@ where
     T: SchemaEnum,
 {
     const VALUE_TYPE: ValueType = ValueType::I32;
+
+    fn default_metadata() -> Option<crate::ExtendedMetadata> {
+        Some(crate::ExtendedMetadata::IntEnum(crate::IntEnum {
+            options: T::VARIANTS
+                .iter()
+                .map(|(name, val)| (name.to_string(), *val))
+                .collect(),
+            default: 0,
+        }))
+    }
 }
 
 /// Unique identifier for an operation type.

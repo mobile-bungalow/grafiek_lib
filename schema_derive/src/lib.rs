@@ -72,7 +72,7 @@ pub fn derive_schema_enum(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(InputSchema, attributes(meta))]
+#[proc_macro_derive(InputSchema, attributes(meta, label))]
 pub fn derive_input_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Input) {
@@ -81,7 +81,7 @@ pub fn derive_input_schema(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(OutputSchema, attributes(meta))]
+#[proc_macro_derive(OutputSchema, attributes(meta, label))]
 pub fn derive_output_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Output) {
@@ -90,7 +90,7 @@ pub fn derive_output_schema(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(ConfigSchema, attributes(meta))]
+#[proc_macro_derive(ConfigSchema, attributes(meta, label))]
 pub fn derive_config_schema(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match derive_schema_impl(input, SchemaKind::Config) {
@@ -113,6 +113,15 @@ fn generate_slot_def(
 ) -> syn::Result<TokenStream2> {
     let field_type = &field.ty;
 
+    // Check for #[label("...")] attribute
+    let label_attr = field.attrs.iter().find(|a| a.path().is_ident("label"));
+    let label_str = if let Some(attr) = label_attr {
+        let lit: syn::LitStr = attr.parse_args()?;
+        lit.value()
+    } else {
+        field_name_str.to_string()
+    };
+
     let meta_attribute = field.attrs.iter().find(|a| a.path().is_ident("meta"));
 
     let meta_attribtue_args = meta_attribute
@@ -124,16 +133,21 @@ fn generate_slot_def(
         Ok(quote! {
             #krate::SlotDef::with_metadata(
                 <#field_type as #krate::AsValueType>::VALUE_TYPE,
-                #field_name_str,
+                #label_str,
                 #krate::ExtendedMetadata::from(#meta_tokens),
             )
         })
     } else {
+        // Use extended_metadata() from the type if available (e.g., SchemaEnum types)
         Ok(quote! {
-            #krate::SlotDef::new(
-                <#field_type as #krate::AsValueType>::VALUE_TYPE,
-                #field_name_str,
-            )
+            {
+                let value_type = <#field_type as #krate::AsValueType>::VALUE_TYPE;
+                if let Some(extended) = <#field_type as #krate::AsValueType>::default_metadata() {
+                    #krate::SlotDef::with_metadata(value_type, #label_str, extended)
+                } else {
+                    #krate::SlotDef::new(value_type, #label_str)
+                }
+            }
         })
     }
 }

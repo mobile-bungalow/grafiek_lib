@@ -109,6 +109,10 @@ impl Node {
         &self.record
     }
 
+    pub fn record_mut(&mut self) -> &mut NodeRecord {
+        &mut self.record
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty.get()
     }
@@ -248,6 +252,27 @@ impl Node {
         let t = f(slot_def, slot_mut);
 
         if self.record.input_values[idx].changed_since(&checkpoint) {
+            self.mark_dirty();
+        }
+
+        Ok(t)
+    }
+
+    /// Directly edit a stored output value on this node
+    /// only used on input system nodes
+    pub(crate) fn edit_output<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
+    where
+        F: FnOnce(&SlotDef, ValueMut) -> T,
+    {
+        let slot = self.output_values.get_mut(idx).ok_or(Error::NoPort(idx))?;
+
+        let checkpoint = slot.checkpoint();
+        let slot_mut = slot.as_mut();
+        let slot_def = self.signature.output(idx).ok_or(Error::NoPort(idx))?;
+
+        let t = f(slot_def, slot_mut);
+
+        if self.output_values[idx].changed_since(&checkpoint) {
             self.mark_dirty();
         }
 

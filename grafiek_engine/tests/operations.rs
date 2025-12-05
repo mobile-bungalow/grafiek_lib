@@ -1,6 +1,6 @@
 mod common;
 
-use grafiek_engine::ops::{ArithOp, Arithmetic, Input, Output};
+use grafiek_engine::ops::{ArithOp, Arithmetic, Input, InputType, Output};
 use grafiek_engine::{Value, ValueMut};
 
 #[test]
@@ -11,7 +11,11 @@ fn init() {
 #[test]
 fn spawn_from_box() {
     let mut engine = common::engine();
-    engine.add_node(Box::new(Input)).unwrap();
+    engine
+        .add_node(Box::new(Input {
+            value_type: InputType::Float,
+        }))
+        .unwrap();
 }
 
 #[test]
@@ -23,9 +27,11 @@ fn spawn_from_path() {
 #[test]
 fn add_with_graph_inputs() {
     let mut engine = common::engine();
-
-    let input_a = engine.add_node(Box::new(Input)).unwrap();
-    let input_b = engine.add_node(Box::new(Input)).unwrap();
+    let inp = Input {
+        value_type: InputType::Float,
+    };
+    let input_a = engine.add_node(Box::new(inp.clone())).unwrap();
+    let input_b = engine.add_node(Box::new(inp)).unwrap();
     let add = engine
         .add_node(Box::new(Arithmetic {
             operation: ArithOp::Add,

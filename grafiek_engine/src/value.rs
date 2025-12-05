@@ -187,6 +187,9 @@ pub trait AsValueType {
     fn value_type() -> ValueType {
         Self::VALUE_TYPE
     }
+    fn default_metadata() -> Option<crate::ExtendedMetadata> {
+        None
+    }
 }
 
 pub trait Extract: Sized + Clone {

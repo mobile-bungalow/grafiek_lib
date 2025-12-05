@@ -118,6 +118,31 @@ impl Engine {
         Ok(index)
     }
 
+    /// Set a node's position.
+    ///
+    /// Emits: [`Mutation::MoveNode`]
+    pub fn set_node_position(
+        &mut self,
+        index: NodeIndex,
+        position: (f32, f32),
+    ) -> Result<(), Error> {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or_else(|| Error::NodeNotFound(format!("Node {:?}", index)))?;
+
+        let old_position = node.record().position;
+        node.record_mut().position = position;
+
+        self.emit(Mutation::MoveNode {
+            node: index,
+            old_position,
+            new_position: position,
+        });
+
+        Ok(())
+    }
+
     /// Connect an output slot of one node to an input slot of another.
     ///
     /// If the target input already has a connection, it will be replaced
@@ -264,7 +289,7 @@ impl Engine {
             return Err(Error::NotInputNode);
         }
 
-        let t = node.edit_input(0, f)?;
+        let t = node.edit_output(0, f)?;
 
         if node.is_dirty() {
             self.emit(Event::GraphDirtied)

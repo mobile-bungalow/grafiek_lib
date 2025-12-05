@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use grafiek_engine::{Engine, EngineDescriptor};
 
 use crate::app::GrafiekApp;
 
@@ -30,13 +29,7 @@ fn main() -> Result<()> {
             let device = render_state.device.clone();
             let queue = render_state.queue.clone();
 
-            let engine = Engine::init(EngineDescriptor {
-                device,
-                queue,
-                on_message: Some(Box::new(|m| log::info!("{m:?}"))),
-            })?;
-
-            let app = GrafiekApp::init(engine).context("failed to initialize app")?;
+            let app = GrafiekApp::init(device, queue).context("failed to initialize app")?;
 
             Ok(Box::new(app))
         }),

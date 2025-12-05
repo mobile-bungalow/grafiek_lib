@@ -19,8 +19,7 @@ pub fn draw_grid(viewport: &egui::Rect, style: &egui::Style, painter: &egui::Pai
 
     // Grid
     xpt_iter
-        .map(|x| ypt_iter.clone().map(move |y| (x, y)))
-        .flatten()
+        .flat_map(|x| ypt_iter.clone().map(move |y| (x, y)))
         .for_each(|(x, y)| {
             painter.circle_filled(egui::pos2(x, y), dot_radius, color);
         });

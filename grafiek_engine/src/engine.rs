@@ -279,7 +279,7 @@ impl Engine {
             .edges_connecting(from, to)
             .find(|e| e.weight().source_slot == from_slot && e.weight().sink_slot == to_slot)
             .map(|e| e.id())
-            .ok_or_else(|| Error::EdgeNotFound { from_slot, to_slot })?;
+            .ok_or(Error::EdgeNotFound { from_slot, to_slot })?;
 
         self.graph.remove_edge(edge_id);
 
@@ -360,15 +360,13 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let res: Result<(), _> = (0..node.input_count())
-            .map(|slot| node.edit_input(slot, &mut f))
-            .collect();
+        let res: Result<(), _> = (0..node.input_count()).try_for_each(|slot| node.edit_input(slot, &mut f));
 
         if node.is_dirty() {
             self.emit(Event::GraphDirtied)
         }
 
-        res.and_then(|_| Ok(()))
+        res.map(|_| ())
     }
 
     /// Edit a node's input slot directly
@@ -425,9 +423,7 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let res: Result<(), _> = (0..node.config_count())
-            .map(|slot| node.edit_config(slot, &mut f))
-            .collect();
+        let res: Result<(), _> = (0..node.config_count()).try_for_each(|slot| node.edit_config(slot, &mut f));
 
         if node.is_dirty() {
             self.emit(Event::GraphDirtied);
@@ -517,11 +513,10 @@ impl Engine {
         }
 
         // Trailt messages with GraphDirtied if they mutated state
-        if dirties_graph {
-            if let Some(ref mut handler) = self.on_message {
+        if dirties_graph
+            && let Some(ref mut handler) = self.on_message {
                 handler(Message::Event(Event::GraphDirtied));
             }
-        }
     }
 
     pub fn undo(&mut self) -> Result<(), Error> {

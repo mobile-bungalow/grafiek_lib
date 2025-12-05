@@ -100,11 +100,10 @@ impl GrafiekApp {
             Mutation::MoveNode {
                 node, new_position, ..
             } => {
-                if let Some(&snarl_id) = self.view_state.snarl_ui.engine_to_snarl.get(&node) {
-                    if let Some(node_info) = self.snarl.get_node_info_mut(snarl_id) {
+                if let Some(&snarl_id) = self.view_state.snarl_ui.engine_to_snarl.get(&node)
+                    && let Some(node_info) = self.snarl.get_node_info_mut(snarl_id) {
                         node_info.pos = egui::pos2(new_position.0, new_position.1);
                     }
-                }
             }
             Mutation::DeleteNode { idx, .. } => {
                 if let Some(snarl_id) = self.view_state.snarl_ui.engine_to_snarl.remove(&idx) {

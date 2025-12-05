@@ -1,6 +1,6 @@
 use std::f32;
 
-use egui::{Color32, Pos2, Rect, Stroke, Vec2, pos2};
+use egui::{Color32, Rect, Stroke, Vec2};
 use egui_snarl::Snarl;
 use grafiek_engine::Engine;
 

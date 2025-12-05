@@ -101,7 +101,9 @@ impl MetadataFor<i32> for Boolean {}
 impl<T> MetadataFor<T> for Vec<u8> {}
 
 #[derive(Debug, Clone, From, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ExtendedMetadata {
+    #[default]
     None,
     #[from]
     FloatRange(FloatRange),
@@ -117,11 +119,6 @@ pub enum ExtendedMetadata {
     Custom(Vec<u8>),
 }
 
-impl Default for ExtendedMetadata {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlotDef {

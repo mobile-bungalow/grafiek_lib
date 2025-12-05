@@ -95,14 +95,13 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         _outputs: &[OutPin],
         snarl: &Snarl<NodeData>,
     ) -> egui::Frame {
-        if let Some(snarl_node) = snarl.get_node(node) {
-            if let Some(node) = self.engine.get_node(snarl_node.engine_node) {
+        if let Some(snarl_node) = snarl.get_node(node)
+            && let Some(node) = self.engine.get_node(snarl_node.engine_node) {
                 let lib = node.record().op_path.library.as_str();
                 let header_color = crate::components::panels::minimap::node_color(lib);
 
                 return default.fill(header_color);
             }
-        }
 
         default
     }
@@ -231,7 +230,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             let _ = self.engine.delete_node(data.engine_node);
         }
 
-        if ui.button("Copy").clicked() {}
+        ui.button("Copy").clicked();
 
         if ui.button("Cut").clicked() {}
     }

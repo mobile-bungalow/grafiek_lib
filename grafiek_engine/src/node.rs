@@ -354,6 +354,16 @@ impl Node {
         self.output_values.get(index)
     }
 
+    /// Snapshot output values for diffing after reconfigure.
+    pub(crate) fn snapshot_outputs(&self) -> Vec<Value> {
+        self.output_values.clone()
+    }
+
+    /// Mutable access to output values for texture allocation.
+    pub(crate) fn output_values_mut(&mut self) -> &mut Vec<Value> {
+        &mut self.output_values
+    }
+
     /// Execute this node's operation.
     /// Builds inputs from incoming values (or falls back to record values),
     /// then calls the operation's execute method.
@@ -374,5 +384,23 @@ impl Node {
         self.clear_dirty();
 
         Ok(())
+    }
+
+    pub(crate) fn on_edge_connected(
+        &mut self,
+        slot: usize,
+        ty: crate::ValueType,
+    ) -> crate::error::Result<()> {
+        self.operation
+            .on_edge_connected(slot, ty, &mut self.signature)
+    }
+
+    pub(crate) fn on_edge_disconnected(
+        &mut self,
+        slot: usize,
+        ty: crate::ValueType,
+    ) -> crate::error::Result<()> {
+        self.operation
+            .on_edge_disconnected(slot, ty, &mut self.signature)
     }
 }

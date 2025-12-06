@@ -100,25 +100,17 @@ pub struct Boolean {
 impl MetadataFor<i32> for Boolean {}
 impl<T> MetadataFor<T> for Vec<u8> {}
 
-#[derive(Debug, Clone, From, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, From, Serialize, Deserialize, Default)]
 pub enum ExtendedMetadata {
     #[default]
     None,
-    #[from]
     FloatRange(FloatRange),
-    #[from]
     Angle(Angle),
-    #[from]
     IntRange(IntRange),
-    #[from]
     IntEnum(IntEnum),
-    #[from]
     Boolean(Boolean),
-    #[from]
     Custom(Vec<u8>),
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlotDef {

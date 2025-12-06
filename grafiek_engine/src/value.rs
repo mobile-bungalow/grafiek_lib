@@ -200,10 +200,57 @@ pub trait ExtractMut: Sized {
     fn extract_mut<'a>(value: &'a mut ValueMut<'_>) -> Result<&'a mut Self, ValueError>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum TextureFormat {
+    #[default]
+    RGBAu8,
+    RGBAu16,
+    RGBAF32,
+    BGRA8,
+}
+
 /// Handle to a texture stored in the engine's texture pool.
 /// The actual texture data is reference-counted by the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct TextureHandle(pub u32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct TextureHandle {
+    pub(crate) id: Option<u32>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) fmt: TextureFormat,
+}
+
+impl TextureHandle {
+    /// Request a texture with the given dimensions. The engine will allocate it.
+    pub fn request(width: u32, height: u32, fmt: TextureFormat) -> Self {
+        Self {
+            id: None,
+            width,
+            height,
+            fmt,
+        }
+    }
+
+    /// The ID may be None if the texture is not yet allocated.
+    pub fn id(&self) -> Option<u32> {
+        self.id
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn fmt(&self) -> TextureFormat {
+        self.fmt
+    }
+
+    pub fn structurally_identical(&self, other: &Self) -> bool {
+        self.width == other.width && self.height == other.height && self.fmt == other.fmt
+    }
+}
 
 define_value_enum! {
     I32: i32,
@@ -273,7 +320,11 @@ impl fmt::Display for Value {
         match self {
             Value::I32(v) => write!(f, "{}", v),
             Value::F32(v) => write!(f, "{:.3}", v),
-            Value::Texture(h) => write!(f, "texture({})", h.0),
+            Value::Texture(h) => write!(
+                f,
+                "texture({0}x{1} - {2:?} - ID: [{3:?}])",
+                h.width, h.height, h.fmt, h.id
+            ),
             Value::Null(_) => write!(f, "null"),
         }
     }

@@ -1,20 +1,21 @@
 use std::collections::HashMap;
 
 use crate::error::Error;
+use crate::gpu_pool::GPUResourcePool;
 use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
-use crate::{SlotDef, TextureHandle, Value, ValueMut};
+use crate::value::TextureHandle;
+use crate::{CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
-use wgpu::{Device, Queue};
+use wgpu::{Device, Queue, Texture};
 
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
     pub device: Device,
     pub queue: Queue,
-    texture_registry: HashMap<TextureHandle, wgpu::Texture>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,16 +40,16 @@ pub struct Engine {
     graph: StableDiGraph<Node, Edge>,
     // Searchable list of operator factories
     registry: OpRegistry,
-    // Passed to each operator on run
-    exe_ctx: ExecutionContext,
+    // Context passed to operators
+    ctx: ExecutionContext,
     // Undo/redo history
     history: History,
     // Optional message handler for UI sync
     on_message: Option<MessageHandler>,
     // The last issued NodeId
     last_id: NodeId,
-    // Mapping of texture owners
-    tex_owners: HashMap<TextureHandle, NodeIndex>,
+    // Texture pool with ownership tracking - may contain buffers later
+    gpu_rsrc_pool: GPUResourcePool,
 }
 
 // Initialization
@@ -58,15 +59,25 @@ impl Engine {
             graph: StableDiGraph::default(),
             registry: OpRegistry::default(),
             history: History::default(),
-            exe_ctx: ExecutionContext {
+            ctx: ExecutionContext {
                 device: desc.device,
                 queue: desc.queue,
-                texture_registry: HashMap::new(),
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
-            tex_owners: HashMap::new(),
+            gpu_rsrc_pool: GPUResourcePool::new(),
         };
+
+        log::info!("loading initial textures");
+        let (device, queue) = (&out.ctx.device, &out.ctx.queue);
+        out.gpu_rsrc_pool
+            .register_system_texture(device, queue, SPECK, &[0, 0, 0, 255]);
+        out.gpu_rsrc_pool
+            .register_system_texture(device, queue, FLECK, &[255; 4]);
+        out.gpu_rsrc_pool
+            .register_system_texture(device, queue, TRANSPARENT_SPECK, &[0; 4]);
+        out.gpu_rsrc_pool
+            .register_system_texture(device, queue, CHECK, &CHECK_DATA);
 
         log::info!("loading grafiek::core operators");
         out.register_op::<ops::Input>()?;
@@ -110,14 +121,15 @@ impl Engine {
     /// emits [Mutation::CreateNode]
     pub fn add_node(&mut self, operation: Box<dyn Operation>) -> Result<NodeIndex, Error> {
         let id = self.next_id();
-        let mut node = Node::new(operation, id);
+        let node = Node::new(operation, id);
 
-        node.setup(&mut self.exe_ctx);
-        node.configure()?;
-
-        let record = node.record().clone();
         let index = self.graph.add_node(node);
 
+        self.graph[index].setup(&mut self.ctx);
+        self.graph[index].configure()?;
+        self.sync_output_textures(index, &[]);
+
+        let record = self.graph[index].record().clone();
         self.emit(Mutation::CreateNode { idx: index, record });
 
         Ok(index)
@@ -139,6 +151,8 @@ impl Engine {
         for (from, to, sink, source) in edges {
             self.disconnect(from, to, sink, source)?;
         }
+
+        self.gpu_rsrc_pool.release_node_textures(index);
 
         let node = self.graph.remove_node(index);
 
@@ -253,6 +267,19 @@ impl Engine {
             },
         );
 
+        let connected_type = self.graph[from]
+            .signature()
+            .output(from_slot)
+            .map(|s| s.value_type)
+            .unwrap_or(crate::ValueType::Any);
+
+        // Notify the target node about the connection
+        let old_outputs = self.graph[to].snapshot_outputs();
+        if let Err(e) = self.graph[to].on_edge_connected(to_slot, connected_type) {
+            log::error!("on_edge_connected failed: {e}");
+        }
+        self.sync_output_textures(to, &old_outputs);
+
         self.emit(Mutation::Connect {
             from_node: from,
             from_slot,
@@ -273,7 +300,12 @@ impl Engine {
         from_slot: usize,
         to_slot: usize,
     ) -> Result<(), Error> {
-        // Find and remove the edge
+        let connected_type = self.graph[from]
+            .signature()
+            .output(from_slot)
+            .map(|s| s.value_type)
+            .unwrap_or(crate::ValueType::Any);
+
         let edge_id = self
             .graph
             .edges_connecting(from, to)
@@ -283,8 +315,13 @@ impl Engine {
 
         self.graph.remove_edge(edge_id);
 
-        // Clear the incoming value on the target node
         self.graph[to].clear_incoming(to_slot);
+
+        let old_outputs = self.graph[to].snapshot_outputs();
+        if let Err(e) = self.graph[to].on_edge_disconnected(to_slot, connected_type) {
+            log::error!("on_edge_disconnected failed: {e}");
+        }
+        self.sync_output_textures(to, &old_outputs);
 
         self.emit(Mutation::Disconnect {
             from_node: from,
@@ -360,7 +397,8 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let res: Result<(), _> = (0..node.input_count()).try_for_each(|slot| node.edit_input(slot, &mut f));
+        let res: Result<(), _> =
+            (0..node.input_count()).try_for_each(|slot| node.edit_input(slot, &mut f));
 
         if node.is_dirty() {
             self.emit(Event::GraphDirtied)
@@ -423,7 +461,8 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let res: Result<(), _> = (0..node.config_count()).try_for_each(|slot| node.edit_config(slot, &mut f));
+        let res: Result<(), _> =
+            (0..node.config_count()).try_for_each(|slot| node.edit_config(slot, &mut f));
 
         if node.is_dirty() {
             self.emit(Event::GraphDirtied);
@@ -469,7 +508,7 @@ impl Engine {
 
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {
-            if let Err(e) = self.graph[node].execute(&mut self.exe_ctx) {
+            if let Err(e) = self.graph[node].execute(&mut self.ctx) {
                 // TODO: emit error state here
                 log::error!("Node execution failed: {e}");
             }
@@ -513,10 +552,9 @@ impl Engine {
         }
 
         // Trailt messages with GraphDirtied if they mutated state
-        if dirties_graph
-            && let Some(ref mut handler) = self.on_message {
-                handler(Message::Event(Event::GraphDirtied));
-            }
+        if dirties_graph && let Some(ref mut handler) = self.on_message {
+            handler(Message::Event(Event::GraphDirtied));
+        }
     }
 
     pub fn undo(&mut self) -> Result<(), Error> {
@@ -573,14 +611,15 @@ impl Engine {
 impl Engine {
     /// Reconfigure a node and disconnect any edges invalidated by the new signature.
     fn reconfigure_node(&mut self, index: NodeIndex) -> Result<(), Error> {
+        let old_outputs = self.graph[index].snapshot_outputs();
         self.graph[index].configure()?;
         self.disconnect_invalid_edges(index);
+        self.sync_output_textures(index, &old_outputs);
         Ok(())
     }
 
     /// Check all edges connected to a node and disconnect any that are no longer valid.
     fn disconnect_invalid_edges(&mut self, index: NodeIndex) {
-        // Collect edge info first to avoid borrow issues
         let edges: Vec<_> = self
             .graph
             .edges(index)
@@ -603,6 +642,51 @@ impl Engine {
                     to_node: to,
                     to_slot: weight.sink_slot,
                 });
+            }
+        }
+    }
+}
+
+// Textures
+impl Engine {
+    /// Get the GPU texture for a handle.
+    pub fn gpu_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
+        handle.id.and_then(|id| self.gpu_rsrc_pool.get(id))
+    }
+
+    /// Allocate or reuse textures for output slots by diffing old vs new.
+    fn sync_output_textures(&mut self, index: NodeIndex, old_outputs: &[Value]) {
+        let new_len = self.graph[index].output_values_mut().len();
+
+        for (slot, output) in self.graph[index].output_values_mut().iter_mut().enumerate() {
+            let Value::Texture(handle) = output else {
+                continue;
+            };
+
+            if handle.id.is_some() {
+                continue;
+            }
+
+            if let Some(Value::Texture(old)) = old_outputs.get(slot)
+                && let Some(old_id) = old.id
+            {
+                if handle.structurally_identical(old) {
+                    handle.id = Some(old_id);
+                    continue;
+                }
+                self.gpu_rsrc_pool.release(old_id);
+            }
+
+            let id = self.gpu_rsrc_pool.allocate(&self.ctx.device, index, handle);
+            handle.id = Some(id);
+        }
+
+        // Release orphaned textures from removed slots
+        for old in old_outputs.iter().skip(new_len) {
+            if let Value::Texture(h) = old
+                && let Some(id) = h.id
+            {
+                self.gpu_rsrc_pool.release(id);
             }
         }
     }

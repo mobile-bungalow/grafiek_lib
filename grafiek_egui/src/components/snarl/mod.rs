@@ -33,6 +33,8 @@ pub struct NodeData {
 pub struct SnarlState {
     pub engine_to_snarl: std::collections::HashMap<NodeIndex, egui_snarl::NodeId>,
     pub viewport: egui::Rect,
+    /// The egui Id used by the snarl widget, needed for querying selection
+    pub snarl_id: Option<egui::Id>,
 }
 
 impl Default for SnarlState {
@@ -43,6 +45,7 @@ impl Default for SnarlState {
                 min: Pos2::new(0.0, 0.0),
                 max: Pos2::new(1200.0, 900.0),
             },
+            snarl_id: None,
         }
     }
 }
@@ -96,12 +99,13 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         snarl: &Snarl<NodeData>,
     ) -> egui::Frame {
         if let Some(snarl_node) = snarl.get_node(node)
-            && let Some(node) = self.engine.get_node(snarl_node.engine_node) {
-                let lib = node.record().op_path.library.as_str();
-                let header_color = crate::components::panels::minimap::node_color(lib);
+            && let Some(node) = self.engine.get_node(snarl_node.engine_node)
+        {
+            let lib = node.record().op_path.library.as_str();
+            let header_color = crate::components::panels::minimap::node_color(lib);
 
-                return default.fill(header_color);
-            }
+            return default.fill(header_color);
+        }
 
         default
     }
@@ -226,6 +230,13 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             return;
         };
 
+        if ui.button("Inspect").clicked() {
+            self.view.show_inspect_node = Some(data.engine_node);
+            ui.close();
+        }
+
+        ui.separator();
+
         if ui.button("Delete").clicked() {
             let _ = self.engine.delete_node(data.engine_node);
         }
@@ -265,7 +276,9 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                     let _ = self.engine.set_node_position(idx, (pos.x, pos.y));
                 }
                 Err(e) => {
-                    log::error!("Failed to create node {}/{}: {}", library, name, e);
+                    let msg = format!("Failed to create node {}/{}: {}", library, name, e);
+                    log::error!("{}", msg);
+                    self.view.notifications.error(msg);
                 }
             }
         }
@@ -279,7 +292,9 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .engine
             .connect(from_node, to_node, from.id.output, to.id.input)
         {
-            log::error!("Failed to connect: {}", e);
+            let msg = format!("Failed to connect: {}", e);
+            log::error!("{}", msg);
+            self.view.notifications.error(msg);
         }
     }
 
@@ -291,7 +306,9 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .engine
             .disconnect(from_node, to_node, from.id.output, to.id.input)
         {
-            log::error!("Failed to disconnect: {}", e);
+            let msg = format!("Failed to disconnect: {}", e);
+            log::error!("{}", msg);
+            self.view.notifications.error(msg);
         }
     }
 }

@@ -100,6 +100,22 @@ pub struct Boolean {
 impl MetadataFor<i32> for Boolean {}
 impl<T> MetadataFor<T> for Vec<u8> {}
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum StringKind {
+    #[default]
+    Plain,
+    Glsl,
+    Rune,
+    Json,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StringMeta {
+    pub kind: StringKind,
+    pub multi_line: bool,
+}
+impl MetadataFor<String> for StringMeta {}
+
 #[derive(Debug, Clone, From, Serialize, Deserialize, Default)]
 pub enum ExtendedMetadata {
     #[default]
@@ -109,6 +125,7 @@ pub enum ExtendedMetadata {
     IntRange(IntRange),
     IntEnum(IntEnum),
     Boolean(Boolean),
+    String(StringMeta),
     Custom(Vec<u8>),
 }
 
@@ -224,6 +241,11 @@ impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
 
     pub fn tooltip(mut self, text: impl Into<String>) -> Self {
         self.common.tooltip = text.into();
+        self
+    }
+
+    pub fn show_on_node_body(mut self, show_on_body: bool) -> Self {
+        self.common.on_node_body = show_on_body;
         self
     }
 

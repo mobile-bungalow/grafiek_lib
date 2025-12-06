@@ -10,7 +10,7 @@ use wgpu::{Device, Queue};
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
-    panels::{show_io_panel, show_minimap},
+    panels::{show_inspector_panel, show_io_panel, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
 };
 
@@ -58,6 +58,7 @@ impl GrafiekApp {
     }
 
     pub fn needs_save(&self) -> bool {
+        // TODO: check save state
         true
     }
 
@@ -101,9 +102,10 @@ impl GrafiekApp {
                 node, new_position, ..
             } => {
                 if let Some(&snarl_id) = self.view_state.snarl_ui.engine_to_snarl.get(&node)
-                    && let Some(node_info) = self.snarl.get_node_info_mut(snarl_id) {
-                        node_info.pos = egui::pos2(new_position.0, new_position.1);
-                    }
+                    && let Some(node_info) = self.snarl.get_node_info_mut(snarl_id)
+                {
+                    node_info.pos = egui::pos2(new_position.0, new_position.1);
+                }
             }
             Mutation::DeleteNode { idx, .. } => {
                 if let Some(snarl_id) = self.view_state.snarl_ui.engine_to_snarl.remove(&idx) {
@@ -171,7 +173,15 @@ impl eframe::App for GrafiekApp {
         let (menu_response, _actions) = MenuBar::show(ctx, &mut self.view_state);
         let top_panel_height = menu_response.response.rect.height() * 2.0;
 
+        if self.view_state.show_logs {
+            egui::Window::new("Log").show(ctx, |ui| {
+                egui_logger::logger_ui().show(ui);
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
+            self.view_state.snarl_ui.snarl_id = Some(ui.make_persistent_id("snarl"));
+
             let view = &mut SnarlView {
                 view: &mut self.view_state,
                 engine: &mut self.engine,
@@ -195,6 +205,14 @@ impl eframe::App for GrafiekApp {
                 &self.view_state.snarl_ui.viewport,
             );
         }
+
+        show_inspector_panel(
+            ctx,
+            &mut self.engine,
+            &mut self.view_state.show_inspect_node,
+        );
+
+        self.view_state.notifications.show(ctx);
 
         let dirty = self.process_messages();
 

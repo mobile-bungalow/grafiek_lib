@@ -5,16 +5,13 @@ use wgpu::{Device, Queue, Texture, TextureDescriptor, TextureUsages};
 
 use crate::value::{TextureFormat, TextureHandle};
 
-/// Identifies who owns a texture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextureOwner {
-    /// System textures owned by the engine (e.g., SPECK, FLECK, CHECK)
     Engine,
     /// Textures owned by a specific node
     Node(NodeIndex),
 }
 
-/// Metadata about a texture in the pool.
 #[derive(Debug)]
 struct TextureEntry {
     owner: TextureOwner,

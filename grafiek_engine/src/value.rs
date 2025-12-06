@@ -157,7 +157,7 @@ macro_rules! define_value_enum {
             impl Extract for $ty {
                 fn extract(value: ValueRef<'_>) -> Result<Self, ValueError> {
                     match value {
-                        ValueRef::$variant(v) => Ok(*v),
+                        ValueRef::$variant(v) => Ok(v.clone()),
                         other => Err(ValueError::TypeMismatch {
                             wanted: stringify!($variant).to_string(),
                             found: format!("{:?}", other),
@@ -219,6 +219,16 @@ pub struct TextureHandle {
     pub(crate) fmt: TextureFormat,
 }
 
+/// Handle to a gpu buffer. free to cast and reinterpret as you choose
+/// Some nodes will reject this based on the metadata on connection
+/// For instance if this represent a vertex buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct BufferHandle {
+    pub(crate) id: Option<u32>,
+    /// Size in bytes
+    pub(crate) size: u32,
+}
+
 impl TextureHandle {
     /// Request a texture with the given dimensions. The engine will allocate it.
     pub fn request(width: u32, height: u32, fmt: TextureFormat) -> Self {
@@ -256,6 +266,9 @@ define_value_enum! {
     I32: i32,
     F32: f32,
     Texture: TextureHandle,
+    Buffer: BufferHandle,
+    // this is mostly for scripts
+    String: String,
 }
 
 impl ValueType {
@@ -323,8 +336,13 @@ impl fmt::Display for Value {
             Value::Texture(h) => write!(
                 f,
                 "texture({0}x{1} - {2:?} - ID: [{3:?}])",
-                h.width, h.height, h.fmt, h.id
+                h.width,
+                h.height,
+                h.fmt,
+                h.id.unwrap_or(0),
             ),
+            Value::Buffer(b) => write!(f, "buffer( Size: {0} [{1:?}])", b.size, b.id),
+            Value::String(s) => write!(f, "{}", s),
             Value::Null(_) => write!(f, "null"),
         }
     }
@@ -337,6 +355,8 @@ impl fmt::Display for ValueType {
             ValueType::I32 => write!(f, "i32"),
             ValueType::F32 => write!(f, "f32"),
             ValueType::Texture => write!(f, "texture"),
+            ValueType::Buffer => write!(f, "buffer"),
+            ValueType::String => write!(f, "string"),
             ValueType::Any => write!(f, "any"),
         }
     }

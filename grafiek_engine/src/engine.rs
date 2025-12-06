@@ -7,7 +7,9 @@ use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::value::TextureHandle;
-use crate::{CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, Value, ValueMut};
+use crate::{
+    CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, TextureFormat, Value, ValueMut,
+};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue, Texture};
@@ -31,6 +33,7 @@ type MessageHandler = Box<dyn FnMut(Message) + Send>;
 pub struct EngineDescriptor {
     pub device: Device,
     pub queue: Queue,
+    //pub default_format: TextureFormat,
     pub on_message: Option<MessageHandler>,
 }
 
@@ -579,6 +582,8 @@ impl Engine {
         self.history.can_redo()
     }
 
+    // TODO: actually apply the mutation
+    // We don't have any keybinds working yet
     fn apply_mutation(&mut self, mutation: Mutation) -> Result<(), Error> {
         match mutation {
             Mutation::CreateNode { .. } => todo!(),
@@ -650,7 +655,7 @@ impl Engine {
 // Textures
 impl Engine {
     /// Get the GPU texture for a handle.
-    pub fn gpu_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
+    pub fn wgpu_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
         handle.id.and_then(|id| self.gpu_rsrc_pool.get(id))
     }
 

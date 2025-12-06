@@ -28,6 +28,11 @@ pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
         (ValueMut::I32(val), _) => ui.add(egui::DragValue::new(val)),
 
         (ValueMut::Texture(_), _) => ui.label("Texture"),
+
+        (ValueMut::Buffer(_), _) => todo!("Buffer!"),
+
+        (ValueMut::String(val), _) => ui.label(val.as_str()), //string_editor(ui, val),
+
         (ValueMut::Null(_), _) => ui.label("null"),
     }
 }

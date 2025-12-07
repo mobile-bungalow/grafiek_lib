@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
-use crate::ValueType;
+use crate::{TextureHandle, ValueType};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommonMetadata {
@@ -30,7 +30,6 @@ pub struct FloatRange {
     pub min: f32,
     pub max: f32,
     pub step: f32,
-    pub default: f32,
 }
 
 impl Default for FloatRange {
@@ -39,7 +38,6 @@ impl Default for FloatRange {
             min: f32::MIN,
             max: f32::MAX,
             step: 1.0,
-            default: 0.0,
         }
     }
 }
@@ -50,7 +48,6 @@ impl MetadataFor<f32> for FloatRange {}
 pub struct Angle {
     pub min: f32,
     pub max: f32,
-    pub default: f32,
     pub unit: AngleUnit,
 }
 
@@ -68,7 +65,6 @@ pub struct IntRange {
     pub min: i32,
     pub max: i32,
     pub step: i32,
-    pub default: i32,
 }
 
 impl Default for IntRange {
@@ -77,7 +73,6 @@ impl Default for IntRange {
             min: i32::MIN,
             max: i32::MAX,
             step: 1,
-            default: 0,
         }
     }
 }
@@ -87,15 +82,12 @@ impl MetadataFor<i32> for IntRange {}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntEnum {
     pub options: Vec<(String, i32)>,
-    pub default: i32,
 }
 
 impl MetadataFor<i32> for IntEnum {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Boolean {
-    pub default: bool,
-}
+pub struct Boolean {}
 
 impl MetadataFor<i32> for Boolean {}
 impl<T> MetadataFor<T> for Vec<u8> {}
@@ -137,6 +129,8 @@ pub struct SlotDef {
     pub extended: ExtendedMetadata,
     #[serde(default)]
     pub common: CommonMetadata,
+    #[serde(default)]
+    pub default_override: Option<crate::Value>,
 }
 
 impl Default for SlotDef {
@@ -146,6 +140,7 @@ impl Default for SlotDef {
             name: Cow::Borrowed(""),
             extended: ExtendedMetadata::None,
             common: CommonMetadata::default(),
+            default_override: None,
         }
     }
 }
@@ -163,6 +158,7 @@ impl SlotDef {
                 visible: false,
                 on_node_body: false,
             },
+            default_override: None,
         }
     }
 
@@ -176,7 +172,16 @@ impl SlotDef {
             name: Cow::Borrowed(name),
             extended,
             common: CommonMetadata::default(),
+            default_override: None,
         }
+    }
+
+    /// Returns the default value for this slot, using the override if set,
+    /// otherwise falling back to the type's default.
+    pub fn default_value(&self) -> crate::Value {
+        self.default_override
+            .clone()
+            .unwrap_or_else(|| self.value_type.default_value())
     }
 
     pub fn set_visible(&mut self, visible: bool) -> &mut Self {
@@ -217,18 +222,31 @@ impl SlotDef {
 
 pub struct SlotBuilder<'a, T> {
     registry: &'a mut Vec<SlotDef>,
+    default: Option<T>,
     name: Cow<'static, str>,
     extended: ExtendedMetadata,
     common: CommonMetadata,
     _marker: std::marker::PhantomData<T>,
 }
 
+impl<'a> SlotBuilder<'a, TextureHandle> {
+    /// Set the dimensions for the texture output.
+    pub fn dimensions(mut self, width: u32, height: u32) -> Self {
+        let mut tex = self.default.take().unwrap_or_default();
+        tex.width = width.max(1);
+        tex.height = height.max(1);
+        self.default = Some(tex);
+        self
+    }
+}
+
 impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
-    pub fn new(registry: &'a mut Vec<SlotDef>, name: &'static str) -> Self {
+    pub fn new(registry: &'a mut Vec<SlotDef>, name: impl Into<Cow<'static, str>>) -> Self {
         Self {
             registry,
-            name: Cow::Borrowed(name),
-            extended: ExtendedMetadata::None,
+            default: None,
+            name: name.into(),
+            extended: T::default_metadata().unwrap_or(ExtendedMetadata::None),
             common: CommonMetadata::default(),
             _marker: std::marker::PhantomData,
         }
@@ -236,6 +254,11 @@ impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
 
     pub fn meta<M: MetadataFor<T> + Into<ExtendedMetadata>>(mut self, metadata: M) -> Self {
         self.extended = metadata.into();
+        self
+    }
+
+    pub fn default(mut self, val: T) -> Self {
+        self.default = Some(val);
         self
     }
 
@@ -259,12 +282,16 @@ impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
         self
     }
 
-    pub fn build(self) {
+    pub fn build(self)
+    where
+        T: Into<crate::Value>,
+    {
         self.registry.push(SlotDef {
             value_type: T::value_type(),
             name: self.name,
             extended: self.extended,
             common: self.common,
+            default_override: self.default.map(Into::into),
         });
     }
 }

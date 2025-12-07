@@ -21,7 +21,13 @@ impl<L1: Log, L2: Log> Log for CombineLogger<L1, L2> {
 }
 
 pub fn init(level: log::LevelFilter) -> Result<()> {
-    let env_log = Builder::from_default_env().filter_level(level).build();
+    let env_log = Builder::from_default_env()
+        .filter_level(level)
+        .filter_module("naga", log::LevelFilter::Warn)
+        .filter_module("wgpu", log::LevelFilter::Warn)
+        .filter_module("wgpu_hal", log::LevelFilter::Warn)
+        .build();
+
     let egui = egui_logger::Builder::default().max_level(level).build();
 
     log::set_max_level(level);

@@ -9,7 +9,7 @@ use crate::components::snarl::NodeData;
 const MAP_PAD: f32 = 50.0;
 const NODE_SIZE: Vec2 = egui::vec2(150.0, 50.0);
 
-/// Get header color for a node based on its library
+//TODO: We should export the default operator library constants
 pub fn node_color(lib: &str) -> Color32 {
     match lib {
         "core" => Color32::from_rgb(50, 88, 80),

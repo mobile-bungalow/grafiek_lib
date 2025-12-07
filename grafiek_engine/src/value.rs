@@ -211,12 +211,24 @@ pub enum TextureFormat {
 
 /// Handle to a texture stored in the engine's texture pool.
 /// The actual texture data is reference-counted by the engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextureHandle {
     pub(crate) id: Option<u32>,
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) fmt: TextureFormat,
+}
+
+const DEFAULT_DIM: u32 = 512;
+impl Default for TextureHandle {
+    fn default() -> Self {
+        Self {
+            id: None,
+            width: DEFAULT_DIM,
+            height: DEFAULT_DIM,
+            fmt: TextureFormat::default(),
+        }
+    }
 }
 
 /// Handle to a gpu buffer. free to cast and reinterpret as you choose
@@ -262,6 +274,8 @@ impl TextureHandle {
     }
 }
 
+// TODO:
+// points, curves, lists, vec types, User defined types
 define_value_enum! {
     I32: i32,
     F32: f32,

@@ -12,6 +12,7 @@ petgraph.workspace = true
 wgpu.workspace = true
 arrayvec = { version = "0.7.6", features = ["serde"] }
 parameter_schema_derive = { path = "../schema_derive" }
+tweak_shader = { git = "https://github.com/mobile-bungalow/tweak_shader" }
 
 [dev-dependencies]
 pollster.workspace = true

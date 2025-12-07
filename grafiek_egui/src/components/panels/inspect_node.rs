@@ -33,33 +33,31 @@ pub fn show_inspector_panel(
         .open(&mut open)
         .default_width(300.0)
         .show(ctx, |ui| {
-            // Debug info
-            ui.label(RichText::new(&op_path).small().weak());
-            ui.label(
-                RichText::new(format!("idx: {:?}", engine_idx))
-                    .small()
-                    .weak(),
-            );
-            ui.label(
-                RichText::new(format!(
+            ui.collapsing("Details", |ui| {
+                ui.label(RichText::new(&op_path));
+                ui.label(RichText::new(format!("idx: {:?}", engine_idx)));
+                ui.label(RichText::new(format!(
                     "inputs: {} | outputs: {} | configs: {}",
                     input_count, output_count, config_count
-                ))
-                .small()
-                .weak(),
-            );
-            ui.separator();
+                )));
+            });
 
+            let mut first = false;
             ScrollArea::vertical().show(ui, |ui| {
-                // Show all configs
-                for slot_idx in 0..config_count {
-                    let _ = engine.edit_node_config(engine_idx, slot_idx, |slot_def, value| {
-                        ui.add_space(4.0);
-                        ui.label(RichText::new(slot_def.name.as_ref()).strong());
+                let _ = engine.edit_all_node_configs(engine_idx, |slot_def, value| {
+                    if slot_def.common.on_node_body {
+                        return;
+                    }
 
-                        crate::components::value::value_editor(ui, slot_def, value);
-                    });
-                }
+                    if first {
+                        ui.separator();
+                        first = !first;
+                    }
+
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(slot_def.name.as_ref()).strong());
+                    crate::components::value::value_editor(ui, slot_def, value);
+                });
             });
         });
 

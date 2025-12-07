@@ -10,7 +10,6 @@ const F32_META: FloatRange = FloatRange {
     min: f32::MIN,
     max: f32::MAX,
     step: 0.1,
-    default: 0.0,
 };
 
 pub struct Arithmetic {
@@ -54,7 +53,12 @@ impl Operation for Arithmetic {
         registry.register_config::<AddConfig>();
     }
 
-    fn configure(&mut self, config: Config, registry: &mut SignatureRegistery) -> Result<()> {
+    fn configure(
+        &mut self,
+        _ctx: &ExecutionContext,
+        config: Config,
+        registry: &mut SignatureRegistery,
+    ) -> Result<()> {
         let cfg = AddConfig::try_extract(config)?;
         self.operation = cfg.operation;
 

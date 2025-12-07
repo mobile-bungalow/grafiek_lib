@@ -219,21 +219,21 @@ impl Node {
             .signature
             .inputs
             .iter()
-            .map(|s| s.value_type.default_value())
+            .map(|s| s.default_value())
             .collect();
 
         self.record.config_values = self
             .signature
             .config
             .iter()
-            .map(|s| s.value_type.default_value())
+            .map(|s| s.default_value())
             .collect();
 
         self.output_values = self
             .signature
             .outputs
             .iter()
-            .map(|s| s.value_type.default_value())
+            .map(|s| s.default_value())
             .collect();
 
         self.incoming_input_values = vec![None; self.input_count()];
@@ -308,7 +308,7 @@ impl Node {
         Ok(t)
     }
 
-    pub fn configure(&mut self) -> crate::error::Result<()> {
+    pub fn configure(&mut self, ctx: &ExecutionContext) -> crate::error::Result<()> {
         let config: Config = self
             .record
             .config_values
@@ -316,13 +316,13 @@ impl Node {
             .map(Value::as_ref)
             .collect();
 
-        self.operation.configure(config, &mut self.signature)?;
+        self.operation.configure(ctx, config, &mut self.signature)?;
 
         self.output_values = self
             .signature
             .outputs
             .iter()
-            .map(|s| s.value_type.default_value())
+            .map(|s| s.default_value())
             .collect();
 
         Ok(())

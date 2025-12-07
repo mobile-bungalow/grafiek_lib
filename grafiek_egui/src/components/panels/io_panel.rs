@@ -53,7 +53,6 @@ pub fn show_io_panel(
                         ui.horizontal(|ui| {
                             ui.label(&label);
                             let _ = engine.edit_graph_input(input_idx, |slot_def, value| {
-                                dbg!(&slot_def);
                                 crate::components::value::value_editor(ui, slot_def, value);
                             });
                         });

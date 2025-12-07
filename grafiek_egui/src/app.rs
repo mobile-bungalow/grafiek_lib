@@ -173,12 +173,11 @@ impl eframe::App for GrafiekApp {
         let (menu_response, _actions) = MenuBar::show(ctx, &mut self.view_state);
         let top_panel_height = menu_response.response.rect.height() * 2.0;
 
-        if self.view_state.show_logs {
-            egui::Window::new("Log").show(ctx, |ui| {
+        egui::Window::new("Log")
+            .open(&mut self.view_state.show_logs)
+            .show(ctx, |ui| {
                 egui_logger::logger_ui().show(ui);
             });
-        }
-
         egui::CentralPanel::default().show(ctx, |ui| {
             self.view_state.snarl_ui.snarl_id = Some(ui.make_persistent_id("snarl"));
 

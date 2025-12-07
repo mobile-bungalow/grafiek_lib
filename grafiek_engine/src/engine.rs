@@ -7,9 +7,7 @@ use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::value::TextureHandle;
-use crate::{
-    CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, TextureFormat, Value, ValueMut,
-};
+use crate::{CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue, Texture};
@@ -86,6 +84,7 @@ impl Engine {
         out.register_op::<ops::Input>()?;
         out.register_op::<ops::Output>()?;
         out.register_op::<ops::Arithmetic>()?;
+        out.register_op::<ops::Shader>()?;
         Ok(out)
     }
 
@@ -129,7 +128,7 @@ impl Engine {
         let index = self.graph.add_node(node);
 
         self.graph[index].setup(&mut self.ctx);
-        self.graph[index].configure()?;
+        self.graph[index].configure(&self.ctx)?;
         self.sync_output_textures(index, &[]);
 
         let record = self.graph[index].record().clone();
@@ -617,7 +616,7 @@ impl Engine {
     /// Reconfigure a node and disconnect any edges invalidated by the new signature.
     fn reconfigure_node(&mut self, index: NodeIndex) -> Result<(), Error> {
         let old_outputs = self.graph[index].snapshot_outputs();
-        self.graph[index].configure()?;
+        self.graph[index].configure(&self.ctx)?;
         self.disconnect_invalid_edges(index);
         self.sync_output_textures(index, &old_outputs);
         Ok(())

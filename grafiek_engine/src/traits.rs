@@ -34,7 +34,12 @@ pub trait Operation: Any {
     /// Configure the operation based on config values
     /// Called after config values are updated to allow operation to reconfigure itself as well as directly
     /// after setup.
-    fn configure(&mut self, _config: Config, _registry: &mut SignatureRegistery) -> Result<()> {
+    fn configure(
+        &mut self,
+        _ctx: &ExecutionContext,
+        _config: Config,
+        _registry: &mut SignatureRegistery,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -133,7 +138,6 @@ where
                 .iter()
                 .map(|(name, val)| (name.to_string(), *val))
                 .collect(),
-            default: 0,
         }))
     }
 }

@@ -21,6 +21,7 @@ impl Operation for Output {
             name: "value".into(),
             extended: crate::ExtendedMetadata::None,
             common: CommonMetadata::default(),
+            default_override: None,
         });
     }
 

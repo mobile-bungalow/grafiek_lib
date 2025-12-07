@@ -30,15 +30,24 @@ impl SignatureRegistery {
         self.outputs.push(def);
     }
 
-    pub fn add_input<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+    pub fn add_input<T: AsValueType>(
+        &mut self,
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> SlotBuilder<'_, T> {
         SlotBuilder::new(&mut self.inputs, name)
     }
 
-    pub fn add_output<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+    pub fn add_output<T: AsValueType>(
+        &mut self,
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> SlotBuilder<'_, T> {
         SlotBuilder::new(&mut self.outputs, name)
     }
 
-    pub fn add_config<T: AsValueType>(&mut self, name: &'static str) -> SlotBuilder<'_, T> {
+    pub fn add_config<T: AsValueType>(
+        &mut self,
+        name: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> SlotBuilder<'_, T> {
         SlotBuilder::new(&mut self.config, name)
     }
 

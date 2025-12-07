@@ -37,7 +37,12 @@ impl Operation for Input {
         registry.register_config::<InputConfig>();
     }
 
-    fn configure(&mut self, config: Config, registry: &mut SignatureRegistery) -> Result<()> {
+    fn configure(
+        &mut self,
+        _ctx: &ExecutionContext,
+        config: Config,
+        registry: &mut SignatureRegistery,
+    ) -> Result<()> {
         let cfg = InputConfig::try_extract(config)?;
         self.value_type = cfg.value_type;
 
@@ -61,7 +66,6 @@ impl Operation for Input {
         _inputs: Inputs,
         _outputs: Outputs,
     ) -> Result<()> {
-        // Output value is set directly via edit_graph_input, nothing to do here
         Ok(())
     }
 }

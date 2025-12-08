@@ -86,10 +86,6 @@ pub struct IntEnum {
 
 impl MetadataFor<i32> for IntEnum {}
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Boolean {}
-
-impl MetadataFor<i32> for Boolean {}
 impl<T> MetadataFor<T> for Vec<u8> {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -108,6 +104,12 @@ pub struct StringMeta {
 }
 impl MetadataFor<String> for StringMeta {}
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TextureMeta {
+    preview: bool,
+}
+impl MetadataFor<TextureHandle> for TextureMeta {}
+
 #[derive(Debug, Clone, From, Serialize, Deserialize, Default)]
 pub enum ExtendedMetadata {
     #[default]
@@ -116,7 +118,6 @@ pub enum ExtendedMetadata {
     Angle(Angle),
     IntRange(IntRange),
     IntEnum(IntEnum),
-    Boolean(Boolean),
     String(StringMeta),
     Custom(Vec<u8>),
 }

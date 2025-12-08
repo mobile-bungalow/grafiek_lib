@@ -4,6 +4,7 @@ use crate::app::GrafiekApp;
 
 pub mod app;
 pub mod components;
+pub mod consts;
 pub mod keybinds;
 pub mod logging;
 

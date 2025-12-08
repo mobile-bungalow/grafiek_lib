@@ -279,6 +279,7 @@ impl TextureHandle {
 define_value_enum! {
     I32: i32,
     F32: f32,
+    Bool: bool,
     Texture: TextureHandle,
     Buffer: BufferHandle,
     // this is mostly for scripts
@@ -303,6 +304,8 @@ impl ValueType {
             (a, b) if a == b => true,
             (ValueType::I32, ValueType::F32) => true,
             (ValueType::F32, ValueType::I32) => true,
+            (ValueType::Bool, ValueType::I32 | ValueType::F32) => true,
+            (ValueType::I32 | ValueType::F32, ValueType::Bool) => true,
             _ => false,
         }
     }
@@ -327,7 +330,8 @@ impl Value {
             (_, ValueType::Any) => self.clone(),
             (Value::I32(i), ValueType::F32) => Value::F32(*i as f32),
             (Value::F32(f), ValueType::I32) => Value::I32(f.trunc() as i32),
-            // Identity cast - type already matches
+            (Value::I32(i), ValueType::Bool) => Value::Bool(*i > 0),
+            (Value::F32(f), ValueType::Bool) => Value::Bool(*f > 0.),
             _ => self.clone(),
         })
     }
@@ -357,6 +361,7 @@ impl fmt::Display for Value {
             ),
             Value::Buffer(b) => write!(f, "buffer( Size: {0} [{1:?}])", b.size, b.id),
             Value::String(s) => write!(f, "{}", s),
+            Value::Bool(b) => write!(f, "{}", b),
             Value::Null(_) => write!(f, "null"),
         }
     }
@@ -371,6 +376,7 @@ impl fmt::Display for ValueType {
             ValueType::Texture => write!(f, "texture"),
             ValueType::Buffer => write!(f, "buffer"),
             ValueType::String => write!(f, "string"),
+            ValueType::Bool => write!(f, "bool"),
             ValueType::Any => write!(f, "any"),
         }
     }

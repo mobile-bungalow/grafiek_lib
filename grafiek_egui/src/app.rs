@@ -178,6 +178,7 @@ impl eframe::App for GrafiekApp {
             .show(ctx, |ui| {
                 egui_logger::logger_ui().show(ui);
             });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             self.view_state.snarl_ui.snarl_id = Some(ui.make_persistent_id("snarl"));
 
@@ -209,6 +210,7 @@ impl eframe::App for GrafiekApp {
             ctx,
             &mut self.engine,
             &mut self.view_state.show_inspect_node,
+            top_panel_height,
         );
 
         self.view_state.notifications.show(ctx);

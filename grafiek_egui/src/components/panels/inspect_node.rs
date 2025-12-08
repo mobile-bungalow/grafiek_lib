@@ -1,22 +1,23 @@
-use egui::{RichText, ScrollArea};
+use egui::{RichText, ScrollArea, TextEdit};
 use grafiek_engine::{Engine, NodeIndex};
 
 pub fn show_inspector_panel(
     ctx: &egui::Context,
     engine: &mut Engine,
     inspect_node: &mut Option<NodeIndex>,
+    top_panel_height: f32,
 ) {
     let Some(engine_idx) = *inspect_node else {
         return;
     };
 
-    // Check if this node still exists
     let Some(node) = engine.get_node(engine_idx) else {
         *inspect_node = None;
         return;
     };
 
-    let title = node.label().to_string();
+    let old_label = node.label().to_string();
+    let mut label = old_label.to_string();
     let op_path = format!(
         "{}/{}",
         node.record().op_path.library,
@@ -26,13 +27,33 @@ pub fn show_inspector_panel(
     let input_count = node.input_count();
     let output_count = node.output_count();
 
+    let panel_width = 300.0;
+    let margin = 8.0;
     let mut open = true;
 
-    egui::Window::new(&title)
+    egui::Window::new("Inspector")
         .id(egui::Id::new("inspector_panel"))
         .open(&mut open)
-        .default_width(300.0)
+        .resizable(false)
+        .default_width(panel_width)
+        .anchor(
+            egui::Align2::RIGHT_TOP,
+            [-margin, margin + top_panel_height / 2.],
+        )
         .show(ctx, |ui| {
+            ui.set_min_width(panel_width);
+
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Name").strong());
+                ui.add(TextEdit::singleline(&mut label).desired_width(f32::INFINITY));
+            });
+
+            if old_label != label {
+                engine.set_label(engine_idx, &label);
+            }
+
+            ui.add_space(4.0);
+
             ui.collapsing("Details", |ui| {
                 ui.label(RichText::new(&op_path));
                 ui.label(RichText::new(format!("idx: {:?}", engine_idx)));

@@ -90,6 +90,25 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .map_or(0, |n| n.output_count())
     }
 
+    fn node_frame(
+        &mut self,
+        default: egui::Frame,
+        node: egui_snarl::NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        snarl: &Snarl<NodeData>,
+    ) -> egui::Frame {
+        let Some(data) = snarl.get_node(node) else {
+            return default;
+        };
+
+        if self.view.show_inspect_node == Some(data.engine_node) {
+            return default.stroke(egui::Stroke::new(2.0, crate::consts::colors::SELECTED));
+        }
+
+        default
+    }
+
     fn header_frame(
         &mut self,
         default: egui::Frame,
@@ -108,6 +127,33 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         }
 
         default
+    }
+
+    fn final_node_rect(
+        &mut self,
+        node: egui_snarl::NodeId,
+        rect: egui::Rect,
+        ui: &mut egui::Ui,
+        snarl: &mut Snarl<NodeData>,
+    ) {
+        // Use pointer.any_released to detect mouse up, avoiding double-click state issues
+        let (primary_released, interact_pos, any_down, was_dragging) = ui.input(|i| {
+            (
+                i.pointer.button_released(egui::PointerButton::Primary),
+                i.pointer.interact_pos(),
+                i.pointer.any_down(),
+                i.pointer.is_decidedly_dragging(),
+            )
+        });
+
+        let in_rect = interact_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+
+        // Select on mouse release within the node rect, but not after dragging
+        if primary_released && in_rect && !any_down && !was_dragging {
+            if let Some(data) = snarl.get_node(node) {
+                self.view.show_inspect_node = Some(data.engine_node);
+            }
+        }
     }
 
     fn has_body(&mut self, node: &NodeData) -> bool {

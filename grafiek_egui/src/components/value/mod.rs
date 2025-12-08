@@ -1,8 +1,12 @@
-use egui::{Response, Ui};
+mod code_editor;
+
+use egui::{Id, Response, Ui};
 use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut};
 
-/// Display a widget for editing a Value based on its type and metadata
 pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
+    // Create a stable ID for this slot
+    let slot_id = Id::new(("value_editor", slot.name.as_ref()));
+
     match (value, &slot.extended) {
         (ValueMut::F32(val), ExtendedMetadata::FloatRange(range)) => ui.add(
             egui::DragValue::new(val)
@@ -19,19 +23,20 @@ pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
                 .range(range.min..=range.max)
                 .speed(range.step),
         ),
-        (ValueMut::I32(val), ExtendedMetadata::Boolean(_)) => {
-            let mut checked = *val != 0;
-            let response = ui.checkbox(&mut checked, "");
-            *val = if checked { 1 } else { 0 };
-            response
-        }
         (ValueMut::I32(val), _) => ui.add(egui::DragValue::new(val)),
 
         (ValueMut::Texture(_), _) => ui.label("Texture"),
 
         (ValueMut::Buffer(_), _) => todo!("Buffer!"),
 
-        (ValueMut::String(val), _) => ui.label(val.as_str()), //string_editor(ui, val),
+        (ValueMut::String(val), ExtendedMetadata::String(meta)) => {
+            code_editor::code_editor_field(ui, slot_id, val, &meta.kind)
+        }
+        (ValueMut::String(val), _) => {
+            code_editor::code_editor_field(ui, slot_id, val, &grafiek_engine::StringKind::Plain)
+        }
+
+        (ValueMut::Bool(val), _) => ui.checkbox(val, ""),
 
         (ValueMut::Null(_), _) => ui.label("null"),
     }

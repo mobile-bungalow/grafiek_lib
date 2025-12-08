@@ -84,7 +84,6 @@ impl Engine {
         out.register_op::<ops::Input>()?;
         out.register_op::<ops::Output>()?;
         out.register_op::<ops::Arithmetic>()?;
-        out.register_op::<ops::Shader>()?;
         Ok(out)
     }
 
@@ -479,6 +478,26 @@ impl Engine {
     /// of the node lifecycle!
     pub fn operation<T: 'static>(&self, index: NodeIndex) -> Option<&T> {
         self.graph.node_weight(index)?.operation()
+    }
+
+    /// Set a node's display label.
+    pub fn set_label(&mut self, index: NodeIndex, label: &str) {
+        if let Some(node) = self.graph.node_weight_mut(index) {
+            let new_label = if label.is_empty() {
+                None
+            } else {
+                Some(label.to_string())
+            };
+            let record = node.record_mut();
+            let old_label = record.label.take();
+            record.label = new_label.clone();
+
+            self.emit(Mutation::SetLabel {
+                node: index,
+                old_label,
+                new_label,
+            });
+        }
     }
 
     /// Get graph output value by index (from OutputOp nodes).

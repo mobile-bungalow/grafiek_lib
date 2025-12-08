@@ -51,4 +51,7 @@ pub enum Error {
 
     #[error("Input node has incoming connection and cannot be edited")]
     InputHasConnection,
+
+    #[error("Script error: {0}")]
+    Script(String),
 }

@@ -136,7 +136,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         ui: &mut egui::Ui,
         snarl: &mut Snarl<NodeData>,
     ) {
-        // Use pointer.any_released to detect mouse up, avoiding double-click state issues
         let (primary_released, interact_pos, any_down, was_dragging) = ui.input(|i| {
             (
                 i.pointer.button_released(egui::PointerButton::Primary),
@@ -148,7 +147,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
         let in_rect = interact_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
 
-        // Select on mouse release within the node rect, but not after dragging
         if primary_released && in_rect && !any_down && !was_dragging {
             if let Some(data) = snarl.get_node(node) {
                 self.view.show_inspect_node = Some(data.engine_node);

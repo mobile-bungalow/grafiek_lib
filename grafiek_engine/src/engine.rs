@@ -12,10 +12,17 @@ use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue, Texture};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ExecutionContext {
     pub device: Device,
     pub queue: Queue,
+    textures: GPUResourcePool,
+}
+
+impl ExecutionContext {
+    pub fn texture(&self, handle: &TextureHandle) -> Option<&Texture> {
+        handle.id.and_then(|id| self.textures.get(id))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,8 +56,6 @@ pub struct Engine {
     on_message: Option<MessageHandler>,
     // The last issued NodeId
     last_id: NodeId,
-    // Texture pool with ownership tracking - may contain buffers later
-    gpu_rsrc_pool: GPUResourcePool,
 }
 
 // Initialization
@@ -63,27 +68,32 @@ impl Engine {
             ctx: ExecutionContext {
                 device: desc.device,
                 queue: desc.queue,
+                textures: GPUResourcePool::new(),
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
-            gpu_rsrc_pool: GPUResourcePool::new(),
         };
 
         log::info!("loading initial textures");
         let (device, queue) = (&out.ctx.device, &out.ctx.queue);
-        out.gpu_rsrc_pool
+        out.ctx
+            .textures
             .register_system_texture(device, queue, SPECK, &[0, 0, 0, 255]);
-        out.gpu_rsrc_pool
+        out.ctx
+            .textures
             .register_system_texture(device, queue, FLECK, &[255; 4]);
-        out.gpu_rsrc_pool
+        out.ctx
+            .textures
             .register_system_texture(device, queue, TRANSPARENT_SPECK, &[0; 4]);
-        out.gpu_rsrc_pool
+        out.ctx
+            .textures
             .register_system_texture(device, queue, CHECK, &CHECK_DATA);
 
         log::info!("loading grafiek::core operators");
         out.register_op::<ops::Input>()?;
         out.register_op::<ops::Output>()?;
         out.register_op::<ops::Arithmetic>()?;
+        out.register_op::<ops::Grayscale>()?;
         Ok(out)
     }
 
@@ -153,7 +163,7 @@ impl Engine {
             self.disconnect(from, to, sink, source)?;
         }
 
-        self.gpu_rsrc_pool.release_node_textures(index);
+        self.ctx.textures.release_node_textures(index);
 
         let node = self.graph.remove_node(index);
 
@@ -674,7 +684,7 @@ impl Engine {
 impl Engine {
     /// Get the GPU texture for a handle.
     pub fn wgpu_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
-        handle.id.and_then(|id| self.gpu_rsrc_pool.get(id))
+        handle.id.and_then(|id| self.ctx.textures.get(id))
     }
 
     /// Allocate or reuse textures for output slots by diffing old vs new.
@@ -697,10 +707,10 @@ impl Engine {
                     handle.id = Some(old_id);
                     continue;
                 }
-                self.gpu_rsrc_pool.release(old_id);
+                self.ctx.textures.release(old_id);
             }
 
-            let id = self.gpu_rsrc_pool.allocate(&self.ctx.device, index, handle);
+            let id = self.ctx.textures.allocate(&self.ctx.device, index, handle);
             handle.id = Some(id);
         }
 
@@ -709,7 +719,7 @@ impl Engine {
             if let Value::Texture(h) = old
                 && let Some(id) = h.id
             {
-                self.gpu_rsrc_pool.release(id);
+                self.ctx.textures.release(id);
             }
         }
     }

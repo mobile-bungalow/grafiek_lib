@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use crate::error::Result;
-use crate::registry::{SignatureRegistery, SlotDef};
+use crate::registry::SignatureRegistery;
 use crate::value::{Config, Inputs, Outputs};
 use crate::{AsValueType, ExecutionContext, ValueType};
 
@@ -89,35 +89,16 @@ pub trait Operation: Any {
 }
 
 pub trait Schema: Default {
-    fn fields() -> Vec<SlotDef>;
+    fn register(registry: &mut SignatureRegistery);
     fn try_extract(values: Config) -> Result<Self>;
 }
 
 pub trait OutputSchema: Schema {
-    fn register(registry: &mut SignatureRegistery) {
-        for field in Self::fields() {
-            registry.outputs.push(field);
-        }
-    }
-
     fn try_write(&self, output: Outputs) -> Result<()>;
 }
 
-pub trait InputSchema: Schema {
-    fn register(registry: &mut SignatureRegistery) {
-        for field in Self::fields() {
-            registry.inputs.push(field);
-        }
-    }
-}
-
-pub trait ConfigSchema: Schema {
-    fn register(registry: &mut SignatureRegistery) {
-        for field in Self::fields() {
-            registry.config.push(field);
-        }
-    }
-}
+pub trait InputSchema: Schema {}
+pub trait ConfigSchema: Schema {}
 
 /// You probably won't have to implement this by hand. Instead use the
 /// derive macro. Enums with const integer representations can be

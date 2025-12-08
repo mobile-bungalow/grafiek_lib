@@ -26,6 +26,17 @@ pub fn init(level: log::LevelFilter) -> Result<()> {
         .filter_module("naga", log::LevelFilter::Warn)
         .filter_module("wgpu", log::LevelFilter::Warn)
         .filter_module("wgpu_hal", log::LevelFilter::Warn)
+        .format(|buf, record| {
+            use std::io::Write;
+            writeln!(
+                buf,
+                "[{} {}:{}] {}",
+                record.level(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
         .build();
 
     let egui = egui_logger::Builder::default().max_level(level).build();

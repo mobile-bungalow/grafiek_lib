@@ -7,16 +7,19 @@ use crate::{TextureHandle, ValueType};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommonMetadata {
-    // Descriptive helpful piece of text shown on hover.
+    /// Descriptive helpful piece of text shown on hover.
     pub tooltip: String,
-    // True if it would be fine to update this value every frame
+    /// True if it would be fine to update this value every frame,
+    /// false if you just want to update it on commit
     pub interactive: bool,
-    // True if this should not be editable from the UI
+    /// True if this should not be editable from the UI
     pub enabled: bool,
-    // True if this piece of state should be hidden
+    /// True if this piece of state should be hidden
     pub visible: bool,
-    // A ui hint indicating this should be shown in some kind of inspector
-    // or info panel as opposed to on the node body itself.
+    /// A ui hint indicating this should be shown in some kind of inspector
+    /// or info panel as opposed to on the node body itself. This is primarily
+    /// meant for config inputs, but if an input does not require a reconfigure
+    /// of the node but should not be slottable in the UI, you can set this to true as well.
     pub on_node_body: bool,
 }
 
@@ -106,7 +109,7 @@ impl MetadataFor<String> for StringMeta {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TextureMeta {
-    preview: bool,
+    pub preview: bool,
 }
 impl MetadataFor<TextureHandle> for TextureMeta {}
 
@@ -118,6 +121,7 @@ pub enum ExtendedMetadata {
     Angle(Angle),
     IntRange(IntRange),
     IntEnum(IntEnum),
+    Texture(TextureMeta),
     String(StringMeta),
     Custom(Vec<u8>),
 }
@@ -154,7 +158,7 @@ impl SlotDef {
             extended: ExtendedMetadata::None,
             common: CommonMetadata {
                 tooltip: String::new(),
-                interactive: false,
+                interactive: true,
                 enabled: false,
                 visible: false,
                 on_node_body: false,
@@ -187,6 +191,11 @@ impl SlotDef {
 
     pub fn set_visible(&mut self, visible: bool) -> &mut Self {
         self.common.visible = visible;
+        self
+    }
+
+    pub fn set_default<T: Into<crate::Value>>(&mut self, default: T) -> &mut Self {
+        self.default_override = Some(default.into());
         self
     }
 

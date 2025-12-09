@@ -31,6 +31,8 @@ pub struct ShaderConfig {
     #[on_node_body]
     #[default(true)]
     pub preview: bool,
+    #[meta(crate::registry::StringMeta { kind: crate::registry::StringKind::Glsl, multi_line: true })]
+    pub source: String,
 }
 
 fn register_input(name: &str, input: &InputType, registry: &mut SignatureRegistery) {
@@ -129,6 +131,10 @@ impl<T: ShaderTemplate> Operation for T {
 
     fn setup(&mut self, ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
         registry.register_config::<ShaderConfig>();
+        // Set the default source from the trait constant (index 4 = source field)
+        if let Some(slot) = registry.config_mut(4) {
+            slot.default_override = Some(crate::Value::String(T::SRC.to_string()));
+        }
 
         let render_ctx = match RenderContext::new(
             T::SRC,
@@ -164,7 +170,7 @@ impl<T: ShaderTemplate> Operation for T {
         let width = cfg.width as u32;
         let height = cfg.height as u32;
 
-        let render_ctx = RenderContext::new(T::SRC, format, &ctx.device, &ctx.queue)
+        let render_ctx = RenderContext::new(&cfg.source, format, &ctx.device, &ctx.queue)
             .map_err(|e| crate::error::Error::Script(format!("Shader compile error: {e}")))?;
 
         registry.clear_inputs();

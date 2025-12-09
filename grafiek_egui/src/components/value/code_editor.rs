@@ -33,7 +33,7 @@ pub fn code_editor_field(ui: &mut Ui, id: Id, code: &mut String, kind: &StringKi
                     ui.add_space(4.0);
 
                     // Inline editor
-                    ScrollArea::vertical()
+                    ScrollArea::both()
                         .max_height(INLINE_MAX_HEIGHT)
                         .show(ui, |ui| {
                             make_editor(
@@ -45,10 +45,17 @@ pub fn code_editor_field(ui: &mut Ui, id: Id, code: &mut String, kind: &StringKi
                             .show(ui, code);
                         });
                 });
+
+            // Detach button always visible when popup is open
+            if popup_open {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Code ({line_count} lines) - editing in popup"));
+                });
+            }
         })
         .response;
 
-    // Popup window (rendered at context level)
+    // Popup window (rendered at context level, independent of collapsing header)
     if popup_open {
         let mut open = true;
         egui::Window::new("Code Editor")

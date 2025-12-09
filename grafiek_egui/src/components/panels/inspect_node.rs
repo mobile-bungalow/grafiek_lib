@@ -27,7 +27,7 @@ pub fn show_inspector_panel(
     let input_count = node.input_count();
     let output_count = node.output_count();
 
-    let panel_width = 300.0;
+    let panel_width = 380.0;
     let margin = 8.0;
     let mut open = true;
 

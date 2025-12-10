@@ -63,7 +63,7 @@ pub fn show_minimap(
             for node_data in snarl.nodes_info() {
                 let color = engine
                     .get_node(node_data.value.engine_node)
-                    .map(|n| node_color(&n.record().op_path.library))
+                    .map(|n| node_color(&n.op_path().library))
                     .unwrap_or(Color32::from_rgb(80, 80, 100));
 
                 let local_pos = (node_data.pos - min) * scale;

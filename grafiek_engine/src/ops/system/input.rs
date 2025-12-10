@@ -1,8 +1,8 @@
 use crate::error::Result;
-use crate::registry::SignatureRegistery;
+use crate::registry::{SignatureRegistery, TextureMeta};
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Config, Inputs, Outputs};
-use crate::{ConfigSchema, EnumSchema, ExecutionContext};
+use crate::{ConfigSchema, EnumSchema, ExecutionContext, TextureHandle};
 
 #[derive(Copy, Clone)]
 pub struct Input {
@@ -14,6 +14,7 @@ pub enum InputType {
     #[default]
     Float = 0,
     Int,
+    Texture,
 }
 
 #[derive(ConfigSchema)]
@@ -54,6 +55,15 @@ impl Operation for Input {
             }
             InputType::Int => {
                 registry.add_output::<i32>("value").build();
+            }
+            InputType::Texture => {
+                registry
+                    .add_output::<TextureHandle>("value")
+                    .meta(TextureMeta {
+                        preview: true,
+                        allow_file: true,
+                    })
+                    .build();
             }
         }
 

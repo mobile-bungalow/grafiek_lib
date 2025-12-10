@@ -1,13 +1,14 @@
 mod code_editor;
+mod image_preview;
 
 use egui::{Id, Response, Ui};
 use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut};
 
 pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
     // Create a stable ID for this slot
-    let slot_id = Id::new(("value_editor", slot.name.as_ref()));
+    let slot_id = Id::new(("value_editor", slot.name()));
 
-    match (value, &slot.extended) {
+    match (value, slot.extended()) {
         (ValueMut::F32(val), ExtendedMetadata::FloatRange(range)) => ui.add(
             egui::DragValue::new(val)
                 .range(range.min..=range.max)

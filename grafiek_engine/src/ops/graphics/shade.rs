@@ -6,6 +6,7 @@ macro_rules! shader_op {
         #[derive(Default)]
         pub struct $name {
             ctx: Option<RenderContext>,
+            match_input_dimensions: bool,
         }
 
         impl ShaderTemplate for $name {
@@ -23,6 +24,14 @@ macro_rules! shader_op {
 
             fn set_context(&mut self, ctx: RenderContext) {
                 self.ctx = Some(ctx);
+            }
+
+            fn match_input_dimensions(&self) -> bool {
+                self.match_input_dimensions
+            }
+
+            fn set_match_input_dimensions(&mut self, val: bool) {
+                self.match_input_dimensions = val;
             }
         }
     };

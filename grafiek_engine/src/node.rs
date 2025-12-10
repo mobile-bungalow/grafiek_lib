@@ -105,11 +105,11 @@ impl Node {
         }
     }
 
-    pub fn record(&self) -> &NodeRecord {
+    pub(crate) fn record(&self) -> &NodeRecord {
         &self.record
     }
 
-    pub fn record_mut(&mut self) -> &mut NodeRecord {
+    pub(crate) fn record_mut(&mut self) -> &mut NodeRecord {
         &mut self.record
     }
 
@@ -118,6 +118,14 @@ impl Node {
             .label
             .as_deref()
             .unwrap_or(&self.record.op_path.operator)
+    }
+
+    pub fn position(&self) -> (f32, f32) {
+        self.record.position
+    }
+
+    pub fn op_path(&self) -> &OpPath {
+        &self.record.op_path
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -161,31 +169,8 @@ impl Node {
     }
 }
 
-// record access
+// Slot access - unified API for inputs, outputs, and configs
 impl Node {
-    /// Get the effective input value (incoming if connected, otherwise record).
-    pub fn input_value(&self, index: usize) -> Option<&Value> {
-        self.incoming_input_values
-            .get(index)
-            .and_then(|v| v.as_ref())
-            .or_else(|| self.record.input_values.get(index))
-    }
-
-    /// Get read access to the stored record input value (ignores incoming).
-    pub fn record_input_value(&self, index: usize) -> Option<&Value> {
-        self.record.input_values.get(index)
-    }
-
-    /// Get mutable access to a constant input value
-    pub fn record_input_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
-        self.record.input_values.get_mut(index).map(Value::as_mut)
-    }
-
-    /// Get mutable access to a config value
-    pub fn config_mut(&mut self, index: usize) -> Option<ValueMut<'_>> {
-        self.record.config_values.get_mut(index).map(Value::as_mut)
-    }
-
     /// Number of input slots
     pub fn input_count(&self) -> usize {
         self.signature.input_count()
@@ -201,6 +186,51 @@ impl Node {
         self.signature.config_count()
     }
 
+    /// Get input slot metadata and value by index.
+    pub fn input(&self, index: usize) -> Option<(&SlotDef, &Value)> {
+        let def = self.signature.input(index)?;
+        let value = self
+            .incoming_input_values
+            .get(index)
+            .and_then(|v| v.as_ref())
+            .or_else(|| self.record.input_values.get(index))?;
+        Some((def, value))
+    }
+
+    /// Get output slot metadata and value by index.
+    pub fn output(&self, index: usize) -> Option<(&SlotDef, &Value)> {
+        let def = self.signature.output(index)?;
+        let value = self.output_values.get(index)?;
+        Some((def, value))
+    }
+
+    /// Get config slot metadata and value by index.
+    pub fn config(&self, index: usize) -> Option<(&SlotDef, &Value)> {
+        let def = self.signature.config(index)?;
+        let value = self.record.config_values.get(index)?;
+        Some((def, value))
+    }
+
+    /// Iterate over all inputs with their metadata and values.
+    pub fn inputs(&self) -> impl Iterator<Item = (&SlotDef, &Value)> {
+        (0..self.input_count()).filter_map(|i| self.input(i))
+    }
+
+    /// Iterate over all outputs with their metadata and values.
+    pub fn outputs(&self) -> impl Iterator<Item = (&SlotDef, &Value)> {
+        (0..self.output_count()).filter_map(|i| self.output(i))
+    }
+
+    /// Iterate over all configs with their metadata and values.
+    pub fn configs(&self) -> impl Iterator<Item = (&SlotDef, &Value)> {
+        (0..self.config_count()).filter_map(|i| self.config(i))
+    }
+
+    /// Check if any config slot is marked to show on node body.
+    pub fn has_body_config(&self) -> bool {
+        self.configs().any(|(def, _)| def.on_node_body())
+    }
+
     /// Downcast the operation to a concrete type.
     /// Returns None if the operation is not of type T.
     pub fn operation<T: std::any::Any + 'static>(&self) -> Option<&T> {
@@ -211,10 +241,11 @@ impl Node {
 
 // Lifecycle
 impl Node {
-    pub fn setup(&mut self, ctx: &mut ExecutionContext) {
+    pub fn setup(&mut self, ctx: &mut ExecutionContext) -> Result<(), crate::error::Error> {
         self.operation.setup(ctx, &mut self.signature);
 
-        // Populate value vectors with defaults based on signature
+        self.signature.validate_unique_names()?;
+
         self.record.input_values = self
             .signature
             .inputs
@@ -237,6 +268,8 @@ impl Node {
             .collect();
 
         self.incoming_input_values = vec![None; self.input_count()];
+
+        Ok(())
     }
 
     /// Directly edit a stored constant value on this node
@@ -308,7 +341,7 @@ impl Node {
         Ok(t)
     }
 
-    pub fn configure(&mut self, ctx: &ExecutionContext) -> crate::error::Result<()> {
+    pub(crate) fn configure(&mut self, ctx: &ExecutionContext) -> crate::error::Result<()> {
         let config: Config = self
             .record
             .config_values
@@ -317,6 +350,8 @@ impl Node {
             .collect();
 
         self.operation.configure(ctx, config, &mut self.signature)?;
+
+        self.signature.validate_unique_names()?;
 
         self.output_values = self
             .signature
@@ -347,11 +382,6 @@ impl Node {
         if let Some(incoming) = self.incoming_input_values.get_mut(slot) {
             *incoming = None;
         }
-    }
-
-    /// Get read access to an output value (for propagating to downstream nodes).
-    pub fn output_value(&self, index: usize) -> Option<&Value> {
-        self.output_values.get(index)
     }
 
     /// Snapshot output values for diffing after reconfigure.

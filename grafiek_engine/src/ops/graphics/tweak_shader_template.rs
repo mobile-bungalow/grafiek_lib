@@ -20,17 +20,25 @@ pub enum TextureFormat {
 #[derive(ConfigSchema)]
 pub struct ShaderConfig {
     pub format: TextureFormat,
+
     #[meta(IntRange { min: 1, max: 8192, step: 1 })]
     #[default(512)]
     #[noninteractive]
     pub width: i32,
+
     #[meta(IntRange { min: 1, max: 8192, step: 1 })]
     #[default(512)]
     #[noninteractive]
     pub height: i32,
+
     #[on_node_body]
     #[default(true)]
     pub preview: bool,
+
+    #[default(true)]
+    #[label("match input dimensions")]
+    pub match_input_dimensions: bool,
+
     #[meta(crate::registry::StringMeta { kind: crate::registry::StringKind::Glsl, multi_line: true })]
     pub source: String,
 }
@@ -98,6 +106,9 @@ pub trait ShaderTemplate: Any + Default + 'static {
     fn context(&self) -> Option<&RenderContext>;
     fn context_mut(&mut self) -> Option<&mut RenderContext>;
     fn set_context(&mut self, ctx: RenderContext);
+
+    fn match_input_dimensions(&self) -> bool;
+    fn set_match_input_dimensions(&mut self, val: bool);
 }
 
 impl<T: ShaderTemplate> OperationFactory for T {
@@ -131,9 +142,9 @@ impl<T: ShaderTemplate> Operation for T {
 
     fn setup(&mut self, ctx: &mut ExecutionContext, registry: &mut SignatureRegistery) {
         registry.register_config::<ShaderConfig>();
-        // Set the default source from the trait constant (index 4 = source field)
-        if let Some(slot) = registry.config_mut(4) {
-            slot.default_override = Some(crate::Value::String(T::SRC.to_string()));
+
+        if let Some(mut slot) = registry.config_by_name::<String>("source") {
+            slot.set_default(T::SRC.to_string());
         }
 
         let render_ctx = match RenderContext::new(
@@ -154,7 +165,10 @@ impl<T: ShaderTemplate> Operation for T {
 
         registry
             .add_output::<crate::TextureHandle>("output")
-            .meta(TextureMeta { preview: true })
+            .meta(TextureMeta {
+                preview: true,
+                allow_file: false,
+            })
             .dimensions(512, 512)
             .build();
     }
@@ -170,6 +184,8 @@ impl<T: ShaderTemplate> Operation for T {
         let width = cfg.width as u32;
         let height = cfg.height as u32;
 
+        self.set_match_input_dimensions(cfg.match_input_dimensions);
+
         let render_ctx = RenderContext::new(&cfg.source, format, &ctx.device, &ctx.queue)
             .map_err(|e| crate::error::Error::Script(format!("Shader compile error: {e}")))?;
 
@@ -178,11 +194,21 @@ impl<T: ShaderTemplate> Operation for T {
         self.set_context(render_ctx);
 
         registry.clear_outputs();
+
+        if let Some(mut slot) = registry.config_by_name::<i32>("width") {
+            slot.set_visible(!cfg.match_input_dimensions);
+        }
+
+        if let Some(mut slot) = registry.config_by_name::<i32>("height") {
+            slot.set_visible(!cfg.match_input_dimensions);
+        }
+
         registry
             .add_output::<crate::TextureHandle>("output")
             .dimensions(width, height)
             .meta(TextureMeta {
                 preview: cfg.preview,
+                allow_file: false,
             })
             .build();
 
@@ -195,13 +221,23 @@ impl<T: ShaderTemplate> Operation for T {
         inputs: Inputs,
         mut outputs: Outputs,
     ) -> Result<()> {
+        let match_dims = self.match_input_dimensions();
         let Some(render_ctx) = self.context_mut() else {
             return Ok(());
         };
 
+        // Find first texture input dimensions if matching is enabled
+        let first_texture_dims = match_dims
+            .then(|| {
+                inputs.iter().find_map(|input| match input {
+                    crate::ValueRef::Texture(h) => Some((h.width(), h.height())),
+                    _ => None,
+                })
+            })
+            .flatten();
+
         // Copy input values to shader uniforms
         let input_names: Vec<_> = render_ctx.iter_inputs().map(|(n, _)| n.clone()).collect();
-
         for (i, input) in inputs.iter().enumerate() {
             let Some(name) = input_names.get(i) else {
                 continue;
@@ -209,6 +245,7 @@ impl<T: ShaderTemplate> Operation for T {
             let Some(mut uniform) = render_ctx.get_input_mut(name) else {
                 continue;
             };
+
             match input {
                 crate::ValueRef::F32(v) => {
                     if let Some(f) = uniform.as_float() {
@@ -234,16 +271,18 @@ impl<T: ShaderTemplate> Operation for T {
                         render_ctx.load_shared_texture(texture, name);
                     }
                 }
-                _ => {
-                    log::error!(
-                        "Unsupported type or something, I swear we are going to deal with this."
-                    );
-                }
+                _ => log::error!("Unsupported input type"),
             }
         }
 
-        // Get output texture and render
         let output_handle: &mut crate::TextureHandle = outputs.extract(0)?;
+
+        if let Some((w, h)) = first_texture_dims {
+            output_handle.width = w;
+            output_handle.height = h;
+        }
+
+        ctx.ensure_texture(output_handle);
         let Some(texture) = ctx.texture(output_handle) else {
             return Ok(());
         };

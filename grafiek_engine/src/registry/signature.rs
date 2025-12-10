@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::slot::{SlotBuilder, SlotDef};
+use super::slot::{SlotBuilder, SlotDef, TypedSlotMut};
 use crate::AsValueType;
 use crate::traits::{ConfigSchema, InputSchema, OutputSchema};
 
@@ -67,24 +67,12 @@ impl SignatureRegistery {
         self.inputs.get(index)
     }
 
-    pub fn input_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
-        self.inputs.get_mut(index)
-    }
-
     pub fn output(&self, index: usize) -> Option<&SlotDef> {
         self.outputs.get(index)
     }
 
-    pub fn output_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
-        self.outputs.get_mut(index)
-    }
-
     pub fn config(&self, index: usize) -> Option<&SlotDef> {
         self.config.get(index)
-    }
-
-    pub fn config_mut(&mut self, index: usize) -> Option<&mut SlotDef> {
-        self.config.get_mut(index)
     }
 
     pub fn input_count(&self) -> usize {
@@ -115,5 +103,63 @@ impl SignatureRegistery {
         self.inputs.clear();
         self.outputs.clear();
         self.config.clear();
+    }
+
+    pub fn input_by_name<T: AsValueType>(&mut self, name: &str) -> Option<TypedSlotMut<'_, T>> {
+        let slot = self.inputs.iter_mut().find(|s| s.name() == name)?;
+        if slot.value_type() != T::value_type() {
+            return None;
+        }
+        Some(TypedSlotMut::new(slot))
+    }
+
+    pub fn output_by_name<T: AsValueType>(&mut self, name: &str) -> Option<TypedSlotMut<'_, T>> {
+        let slot = self.outputs.iter_mut().find(|s| s.name() == name)?;
+        if slot.value_type() != T::value_type() {
+            return None;
+        }
+        Some(TypedSlotMut::new(slot))
+    }
+
+    pub fn config_by_name<T: AsValueType>(&mut self, name: &str) -> Option<TypedSlotMut<'_, T>> {
+        let slot = self.config.iter_mut().find(|s| s.name() == name)?;
+        if slot.value_type() != T::value_type() {
+            return None;
+        }
+        Some(TypedSlotMut::new(slot))
+    }
+
+    pub(crate) fn validate_unique_names(&self) -> Result<(), crate::error::Error> {
+        fn find_duplicate(slots: &[SlotDef]) -> Option<&str> {
+            for (i, slot) in slots.iter().enumerate() {
+                if slots[..i].iter().any(|s| s.name() == slot.name()) {
+                    return Some(slot.name());
+                }
+            }
+            None
+        }
+
+        if let Some(name) = find_duplicate(&self.inputs) {
+            return Err(crate::error::Error::DuplicateSlotName(
+                name.into(),
+                "inputs".into(),
+            ));
+        }
+
+        if let Some(name) = find_duplicate(&self.outputs) {
+            return Err(crate::error::Error::DuplicateSlotName(
+                name.into(),
+                "outputs".into(),
+            ));
+        }
+
+        if let Some(name) = find_duplicate(&self.config) {
+            return Err(crate::error::Error::DuplicateSlotName(
+                name.into(),
+                "config".into(),
+            ));
+        }
+
+        Ok(())
     }
 }

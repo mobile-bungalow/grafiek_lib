@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
 
+use crate::gpu_pool::TextureId;
+
 /// Maximum number of input/output slots per node
 pub const MAX_SLOTS: usize = 32;
 
@@ -213,7 +215,7 @@ pub enum TextureFormat {
 /// The actual texture data is reference-counted by the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextureHandle {
-    pub(crate) id: Option<u32>,
+    pub(crate) id: Option<TextureId>,
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) fmt: TextureFormat,
@@ -253,7 +255,7 @@ impl TextureHandle {
     }
 
     /// The ID may be None if the texture is not yet allocated.
-    pub fn id(&self) -> Option<u32> {
+    pub fn id(&self) -> Option<TextureId> {
         self.id
     }
 
@@ -351,14 +353,14 @@ impl fmt::Display for Value {
         match self {
             Value::I32(v) => write!(f, "{}", v),
             Value::F32(v) => write!(f, "{:.3}", v),
-            Value::Texture(h) => write!(
-                f,
-                "texture({0}x{1} - {2:?} - ID: [{3:?}])",
-                h.width,
-                h.height,
-                h.fmt,
-                h.id.unwrap_or(0),
-            ),
+            Value::Texture(h) => match h.id {
+                Some(id) => write!(f, "texture({}x{} {:?} #{})", h.width, h.height, h.fmt, id.0),
+                None => write!(
+                    f,
+                    "texture({}x{} {:?} unallocated)",
+                    h.width, h.height, h.fmt
+                ),
+            },
             Value::Buffer(b) => write!(f, "buffer( Size: {0} [{1:?}])", b.size, b.id),
             Value::String(s) => write!(f, "{}", s),
             Value::Bool(b) => write!(f, "{}", b),

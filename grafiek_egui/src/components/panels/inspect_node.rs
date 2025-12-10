@@ -18,11 +18,7 @@ pub fn show_inspector_panel(
 
     let old_label = node.label().to_string();
     let mut label = old_label.to_string();
-    let op_path = format!(
-        "{}/{}",
-        node.record().op_path.library,
-        node.record().op_path.operator
-    );
+    let op_path = format!("{}/{}", node.op_path().library, node.op_path().operator);
     let config_count = node.config_count();
     let input_count = node.input_count();
     let output_count = node.output_count();
@@ -66,7 +62,7 @@ pub fn show_inspector_panel(
             let mut first = false;
             ScrollArea::vertical().show(ui, |ui| {
                 let _ = engine.edit_all_node_configs(engine_idx, |slot_def, value| {
-                    if slot_def.common.on_node_body {
+                    if slot_def.on_node_body() || !slot_def.is_visible() {
                         return;
                     }
 
@@ -76,7 +72,7 @@ pub fn show_inspector_panel(
                     }
 
                     ui.add_space(4.0);
-                    ui.label(RichText::new(slot_def.name.as_ref()).strong());
+                    ui.label(RichText::new(slot_def.name()).strong());
                     crate::components::value::value_editor(ui, slot_def, value);
                 });
             });

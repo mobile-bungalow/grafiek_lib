@@ -7,6 +7,9 @@ pub enum Error {
     #[error("Unknown operation type: {0}")]
     UnknownOperationType(String),
 
+    #[error("Node was configured with two slots named {0} on its {1}.")]
+    DuplicateSlotName(String, String),
+
     #[error("Duplicate operation type: {0}/{1}")]
     DuplicateOperationType(&'static str, &'static str),
 

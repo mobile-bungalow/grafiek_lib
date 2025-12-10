@@ -13,6 +13,8 @@ pub mod colors {
     pub const DEFAULT_NODE: Color32 = Color32::from_rgb(60, 60, 60);
 }
 
+// TODO: define these syntaxes for the code editor unless
+// we go a different editor route
 pub mod syntax {
     pub const RUNE: () = ();
     pub const GLSL: () = ();

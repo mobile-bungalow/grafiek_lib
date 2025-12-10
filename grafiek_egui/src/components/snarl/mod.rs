@@ -12,13 +12,6 @@ pub use style::style;
 
 use crate::app::ViewState;
 
-/// Pending node creation - position is tracked here since the engine
-/// emits CreateNode after we call instance_node, but doesn't know the UI position
-#[derive(Debug, Clone)]
-pub struct PendingNodeCreate {
-    pub position: Pos2,
-}
-
 pub struct SnarlView<'a> {
     pub view: &'a mut ViewState,
     pub engine: &'a mut Engine,
@@ -74,7 +67,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let idx = node.engine_node;
         self.engine
             .get_node(idx)
-            .and_then(|n| n.record().label.clone())
+            .map(|n| n.label().to_string())
             .unwrap_or_else(|| node.op_type.clone())
     }
 
@@ -120,7 +113,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         if let Some(snarl_node) = snarl.get_node(node)
             && let Some(node) = self.engine.get_node(snarl_node.engine_node)
         {
-            let lib = node.record().op_path.library.as_str();
+            let lib = node.op_path().library.as_str();
             let header_color = crate::components::panels::minimap::node_color(lib);
 
             return default.fill(header_color);
@@ -129,36 +122,11 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         default
     }
 
-    fn final_node_rect(
-        &mut self,
-        node: egui_snarl::NodeId,
-        rect: egui::Rect,
-        ui: &mut egui::Ui,
-        snarl: &mut Snarl<NodeData>,
-    ) {
-        let (primary_released, interact_pos, any_down, was_dragging) = ui.input(|i| {
-            (
-                i.pointer.button_released(egui::PointerButton::Primary),
-                i.pointer.interact_pos(),
-                i.pointer.any_down(),
-                i.pointer.is_decidedly_dragging(),
-            )
-        });
-
-        let in_rect = interact_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
-
-        if primary_released && in_rect && !any_down && !was_dragging {
-            if let Some(data) = snarl.get_node(node) {
-                self.view.show_inspect_node = Some(data.engine_node);
-            }
-        }
-    }
-
     fn has_body(&mut self, node: &NodeData) -> bool {
         self.engine
             .get_node(node.engine_node)
-            .map(|n| n.config_count() > 0)
-            .unwrap_or_default()
+            .map(|n| n.has_body_config())
+            .unwrap_or(false)
     }
 
     fn show_body(
@@ -183,7 +151,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                 let _ = self
                     .engine
                     .edit_node_config(idx, slot_idx, |slot_def, value| {
-                        if !slot_def.common.on_node_body {
+                        if !slot_def.on_node_body() {
                             return;
                         }
 
@@ -193,7 +161,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                         }
 
                         ui.horizontal(|ui| {
-                            ui.label(slot_def.name.as_ref());
+                            ui.label(slot_def.name());
                             crate::components::value::value_editor(ui, slot_def, value);
                         });
 
@@ -218,7 +186,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .engine
             .edit_node_input(idx, slot_idx, |slot_def, value| {
                 ui.horizontal(|ui| {
-                    ui.label(slot_def.name.as_ref());
+                    ui.label(slot_def.name());
                     if !connected {
                         crate::components::value::value_editor(ui, slot_def, value);
                     }
@@ -248,7 +216,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         };
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(slot_def.name.as_ref());
+            ui.label(slot_def.name());
         });
 
         PinInfo::default().with_side(PinSide::Right)

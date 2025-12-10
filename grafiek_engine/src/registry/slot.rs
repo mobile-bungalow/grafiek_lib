@@ -1,14 +1,15 @@
 use std::borrow::Cow;
+use std::marker::PhantomData;
 
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
-use crate::{TextureHandle, ValueType};
+use crate::{AsValueType, TextureHandle, ValueType};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommonMetadata {
     /// Descriptive helpful piece of text shown on hover.
-    pub tooltip: String,
+    pub tooltip: Option<String>,
     /// True if it would be fine to update this value every frame,
     /// false if you just want to update it on commit
     pub interactive: bool,
@@ -21,6 +22,18 @@ pub struct CommonMetadata {
     /// meant for config inputs, but if an input does not require a reconfigure
     /// of the node but should not be slottable in the UI, you can set this to true as well.
     pub on_node_body: bool,
+}
+
+impl Default for CommonMetadata {
+    fn default() -> Self {
+        Self {
+            tooltip: None,
+            interactive: true,
+            enabled: true,
+            visible: true,
+            on_node_body: false,
+        }
+    }
 }
 
 // A marker trait which prevents SlotDefs from
@@ -109,7 +122,10 @@ impl MetadataFor<String> for StringMeta {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TextureMeta {
+    /// Show this image on the node body, or somewhere else in the application.
     pub preview: bool,
+    /// Allow a file picker to be used in assigning this data.
+    pub allow_file: bool,
 }
 impl MetadataFor<TextureHandle> for TextureMeta {}
 
@@ -128,14 +144,14 @@ pub enum ExtendedMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlotDef {
-    pub value_type: ValueType,
-    pub name: Cow<'static, str>,
+    pub(crate) value_type: ValueType,
+    pub(crate) name: Cow<'static, str>,
     #[serde(default)]
-    pub extended: ExtendedMetadata,
+    pub(crate) extended: ExtendedMetadata,
     #[serde(default)]
-    pub common: CommonMetadata,
+    pub(crate) common: CommonMetadata,
     #[serde(default)]
-    pub default_override: Option<crate::Value>,
+    pub(crate) default_override: Option<crate::Value>,
 }
 
 impl Default for SlotDef {
@@ -151,34 +167,29 @@ impl Default for SlotDef {
 }
 
 impl SlotDef {
-    pub const fn new(value_type: ValueType, name: &'static str) -> Self {
-        Self {
-            value_type,
-            name: Cow::Borrowed(name),
-            extended: ExtendedMetadata::None,
-            common: CommonMetadata {
-                tooltip: String::new(),
-                interactive: true,
-                enabled: false,
-                visible: false,
-                on_node_body: false,
-            },
-            default_override: None,
-        }
+    /// Returns the name of this slot.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
-    pub fn with_metadata(
-        value_type: ValueType,
-        name: &'static str,
-        extended: ExtendedMetadata,
-    ) -> Self {
-        Self {
-            value_type,
-            name: Cow::Borrowed(name),
-            extended,
-            common: CommonMetadata::default(),
-            default_override: None,
-        }
+    /// Returns the value type of this slot.
+    pub fn value_type(&self) -> ValueType {
+        self.value_type
+    }
+
+    /// Returns the extended metadata for this slot.
+    pub fn extended(&self) -> &ExtendedMetadata {
+        &self.extended
+    }
+
+    /// Whether or not to render this element
+    pub fn is_visible(&self) -> bool {
+        self.common.visible
+    }
+
+    /// Returns whether this slot should be shown on the node body.
+    pub fn on_node_body(&self) -> bool {
+        self.common.on_node_body
     }
 
     /// Returns the default value for this slot, using the override if set,
@@ -194,11 +205,6 @@ impl SlotDef {
         self
     }
 
-    pub fn set_default<T: Into<crate::Value>>(&mut self, default: T) -> &mut Self {
-        self.default_override = Some(default.into());
-        self
-    }
-
     pub fn set_enabled(&mut self, enabled: bool) -> &mut Self {
         self.common.enabled = enabled;
         self
@@ -210,7 +216,7 @@ impl SlotDef {
     }
 
     pub fn set_tooltip(&mut self, tooltip: impl Into<String>) -> &mut Self {
-        self.common.tooltip = tooltip.into();
+        self.common.tooltip = Some(tooltip.into());
         self
     }
 
@@ -273,7 +279,7 @@ impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
     }
 
     pub fn tooltip(mut self, text: impl Into<String>) -> Self {
-        self.common.tooltip = text.into();
+        self.common.tooltip = Some(text.into());
         self
     }
 
@@ -303,5 +309,61 @@ impl<'a, T: crate::AsValueType> SlotBuilder<'a, T> {
             common: self.common,
             default_override: self.default.map(Into::into),
         });
+    }
+}
+
+/// A type-safe mutable reference to a slot definition.
+/// Ensures that default values and metadata match the slot's type.
+pub struct TypedSlotMut<'a, T> {
+    slot: &'a mut SlotDef,
+    _marker: PhantomData<T>,
+}
+
+impl<'a, T: AsValueType> TypedSlotMut<'a, T> {
+    pub(crate) fn new(slot: &'a mut SlotDef) -> Self {
+        debug_assert_eq!(slot.value_type, T::value_type());
+        Self {
+            slot,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Set the default value for this slot.
+    pub fn set_default(&mut self, val: T) -> &mut Self
+    where
+        T: Into<crate::Value>,
+    {
+        self.slot.default_override = Some(val.into());
+        self
+    }
+
+    /// Set extended metadata for this slot.
+    pub fn set_meta<M: MetadataFor<T> + Into<ExtendedMetadata>>(&mut self, meta: M) -> &mut Self {
+        self.slot.extended = meta.into();
+        self
+    }
+
+    /// Set whether this slot should be shown on the node body.
+    pub fn set_on_node_body(&mut self, on_node_body: bool) -> &mut Self {
+        self.slot.common.on_node_body = on_node_body;
+        self
+    }
+
+    /// Set whether this slot is interactive.
+    pub fn set_interactive(&mut self, interactive: bool) -> &mut Self {
+        self.slot.common.interactive = interactive;
+        self
+    }
+
+    /// Set the tooltip for this slot.
+    pub fn set_tooltip(&mut self, tooltip: impl Into<String>) -> &mut Self {
+        self.slot.common.tooltip = Some(tooltip.into());
+        self
+    }
+
+    /// Set visibility of this slot.
+    pub fn set_visible(&mut self, visible: bool) -> &mut Self {
+        self.slot.common.visible = visible;
+        self
     }
 }

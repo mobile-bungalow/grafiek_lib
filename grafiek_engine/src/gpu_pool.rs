@@ -1,92 +1,118 @@
 use std::collections::HashMap;
 
 use petgraph::graph::NodeIndex;
+use serde::{Deserialize, Serialize};
 use wgpu::{Device, Queue, Texture, TextureDescriptor, TextureUsages};
 
+use crate::registry::consts::SYSTEM_TEXTURE_COUNT;
 use crate::value::{TextureFormat, TextureHandle};
+
+/// Stable texture identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct TextureId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextureOwner {
     Engine,
-    /// Textures owned by a specific node
     Node(NodeIndex),
 }
 
 #[derive(Debug)]
 struct TextureEntry {
-    owner: TextureOwner,
     texture: Texture,
+    owner: TextureOwner,
 }
 
 /// Manages GPU textures and their ownership.
 #[derive(Debug, Default)]
 pub struct GPUResourcePool {
-    /// Map from texture ID to entry
-    textures: HashMap<u32, TextureEntry>,
-    /// The next ID to assign (automatically tracks past system textures)
-    next_id: u32,
+    textures: HashMap<TextureId, TextureEntry>,
+    next_id: u64,
 }
 
 impl GPUResourcePool {
     pub fn new() -> Self {
         Self {
             textures: HashMap::new(),
-            next_id: 0,
+            next_id: SYSTEM_TEXTURE_COUNT,
         }
     }
 
-    /// Register a system texture with predetermined ID and data.
-    pub fn register_system_texture(
+    fn next_id(&mut self) -> TextureId {
+        let id = TextureId(self.next_id);
+        self.next_id += 1;
+        id
+    }
+
+    /// Insert a system texture at its predefined ID.
+    pub(crate) fn insert_texture(
         &mut self,
         device: &Device,
         queue: &Queue,
         handle: TextureHandle,
         data: &[u8],
     ) {
-        let id = handle.id.expect("system texture must have id");
-        self.next_id = self.next_id.max(id + 1);
-
+        let id = handle.id.expect("system texture must have predefined ID");
         let texture = create_gpu_texture(device, queue, &handle, data);
         self.textures.insert(
             id,
             TextureEntry {
-                owner: TextureOwner::Engine,
                 texture,
+                owner: TextureOwner::Engine,
             },
         );
     }
 
-    /// Allocate a texture for the given handle, returning the assigned ID.
-    pub fn allocate(&mut self, device: &Device, owner: NodeIndex, handle: &TextureHandle) -> u32 {
-        let id = self.next_id;
-        self.next_id += 1;
-
+    pub(crate) fn alloc_texture(&mut self, device: &Device, handle: &TextureHandle) -> TextureId {
+        let id = self.next_id();
         let texture = create_gpu_texture_empty(device, handle);
         self.textures.insert(
             id,
             TextureEntry {
-                owner: TextureOwner::Node(owner),
                 texture,
+                owner: TextureOwner::Engine,
             },
         );
-
         id
     }
 
-    /// Get the GPU texture by ID.
-    pub fn get(&self, id: u32) -> Option<&Texture> {
+    pub(crate) fn alloc_texture_with_data(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        owner: NodeIndex,
+        handle: &TextureHandle,
+        data: &[u8],
+    ) -> TextureId {
+        let id = self.next_id();
+        let texture = create_gpu_texture(device, queue, handle, data);
+        self.textures.insert(
+            id,
+            TextureEntry {
+                texture,
+                owner: TextureOwner::Node(owner),
+            },
+        );
+        id
+    }
+
+    pub fn get_texture(&self, id: TextureId) -> Option<&Texture> {
         self.textures.get(&id).map(|e| &e.texture)
     }
 
-    /// Release a specific texture by ID.
-    pub fn release(&mut self, id: u32) {
+    pub fn replace_texture(&mut self, id: TextureId, texture: Texture) {
+        if let Some(entry) = self.textures.get_mut(&id) {
+            entry.texture = texture;
+        }
+    }
+
+    pub fn release_texture(&mut self, id: TextureId) {
         self.textures.remove(&id);
     }
 
-    /// Release all textures owned by a node.
     pub fn release_node_textures(&mut self, node: NodeIndex) {
         self.textures
-            .retain(|_, entry| entry.owner != TextureOwner::Node(node));
+            .retain(|_, e| e.owner != TextureOwner::Node(node));
     }
 }
 
@@ -147,7 +173,7 @@ fn create_gpu_texture(
     texture
 }
 
-fn create_gpu_texture_empty(device: &Device, handle: &TextureHandle) -> Texture {
+pub(crate) fn create_gpu_texture_empty(device: &Device, handle: &TextureHandle) -> Texture {
     let size = wgpu::Extent3d {
         width: handle.width,
         height: handle.height,

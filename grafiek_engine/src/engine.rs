@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use crate::error::Error;
-use crate::gpu_pool::GPUResourcePool;
+use crate::gpu_pool::{GPUResourcePool, create_gpu_texture_empty};
 use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
+use crate::registry::consts::{CHECK, CHECK_DATA, FLECK, SPECK, TRANSPARENT_SPECK};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::value::TextureHandle;
-use crate::{CHECK, CHECK_DATA, FLECK, SPECK, SlotDef, TRANSPARENT_SPECK, Value, ValueMut};
+use crate::{SlotDef, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue, Texture};
@@ -21,7 +22,29 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
     pub fn texture(&self, handle: &TextureHandle) -> Option<&Texture> {
-        handle.id.and_then(|id| self.textures.get(id))
+        self.textures.get_texture(handle.id?)
+    }
+
+    /// Ensure the texture exists with the correct dimensions, replacing in-place if needed.
+    /// This is intended for render targets that are about to be overwritten anyways, it zeros them.
+    pub fn ensure_texture(&mut self, handle: &mut TextureHandle) {
+        match handle.id {
+            None => {
+                log::debug!("ho!");
+                handle.id = Some(self.textures.alloc_texture(&self.device, handle));
+            }
+            Some(id) => {
+                log::debug!("ha!");
+                let needs_resize = self.textures.get_texture(id).map_or(false, |tex| {
+                    let size = tex.size();
+                    size.width != handle.width || size.height != handle.height
+                });
+                if needs_resize {
+                    let texture = create_gpu_texture_empty(&self.device, handle);
+                    self.textures.replace_texture(id, texture);
+                }
+            }
+        }
     }
 }
 
@@ -61,6 +84,14 @@ pub struct Engine {
 // Initialization
 impl Engine {
     pub fn init(desc: EngineDescriptor) -> Result<Self, Error> {
+        let mut textures = GPUResourcePool::new();
+
+        log::info!("loading initial textures");
+        textures.insert_texture(&desc.device, &desc.queue, SPECK, &[0, 0, 0, 255]);
+        textures.insert_texture(&desc.device, &desc.queue, FLECK, &[255; 4]);
+        textures.insert_texture(&desc.device, &desc.queue, TRANSPARENT_SPECK, &[0; 4]);
+        textures.insert_texture(&desc.device, &desc.queue, CHECK, &CHECK_DATA);
+
         let mut out = Self {
             graph: StableDiGraph::default(),
             registry: OpRegistry::default(),
@@ -68,26 +99,11 @@ impl Engine {
             ctx: ExecutionContext {
                 device: desc.device,
                 queue: desc.queue,
-                textures: GPUResourcePool::new(),
+                textures,
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
         };
-
-        log::info!("loading initial textures");
-        let (device, queue) = (&out.ctx.device, &out.ctx.queue);
-        out.ctx
-            .textures
-            .register_system_texture(device, queue, SPECK, &[0, 0, 0, 255]);
-        out.ctx
-            .textures
-            .register_system_texture(device, queue, FLECK, &[255; 4]);
-        out.ctx
-            .textures
-            .register_system_texture(device, queue, TRANSPARENT_SPECK, &[0; 4]);
-        out.ctx
-            .textures
-            .register_system_texture(device, queue, CHECK, &CHECK_DATA);
 
         log::info!("loading grafiek::core operators");
         out.register_op::<ops::Input>()?;
@@ -136,7 +152,7 @@ impl Engine {
 
         let index = self.graph.add_node(node);
 
-        self.graph[index].setup(&mut self.ctx);
+        self.graph[index].setup(&mut self.ctx)?;
         self.graph[index].configure(&self.ctx)?;
         self.sync_output_textures(index, &[]);
 
@@ -515,13 +531,14 @@ impl Engine {
     pub fn result(&self, index: usize) -> Option<&Value> {
         self.output_nodes()
             .nth(index)
-            .and_then(|n| n.input_value(0))
+            .and_then(|n| n.input(0).map(|(_, v)| v))
     }
 
     /// Iterate over all graph output values.
     /// Returns values from all Output nodes in the order they were added.
     pub fn results(&self) -> impl Iterator<Item = &Value> {
-        self.output_nodes().filter_map(|n| n.input_value(0))
+        self.output_nodes()
+            .filter_map(|n| n.input(0).map(|(_, v)| v))
     }
 
     /// Iterate over all Output nodes in the graph.
@@ -553,7 +570,9 @@ impl Engine {
 
             while let Some((edge, dep)) = dependants.next(&self.graph) {
                 let edge = self.graph[edge].clone();
-                let value = self.graph[node].output_value(edge.source_slot).cloned();
+                let value = self.graph[node]
+                    .output(edge.source_slot)
+                    .map(|(_, v)| v.clone());
                 if let Some(value) = value {
                     self.graph[dep].push_incoming(edge.sink_slot, value);
                 }
@@ -683,11 +702,53 @@ impl Engine {
 // Textures
 impl Engine {
     /// Get the GPU texture for a handle.
-    pub fn wgpu_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
-        handle.id.and_then(|id| self.ctx.textures.get(id))
+    pub fn get_texture(&self, handle: &TextureHandle) -> Option<&Texture> {
+        self.ctx.textures.get_texture(handle.id?)
     }
 
-    /// Allocate or reuse textures for output slots by diffing old vs new.
+    /// Upload pixel data to a texture output slot. Updates handle dimensions and allocates GPU texture.
+    pub fn upload_texture(
+        &mut self,
+        index: NodeIndex,
+        slot: usize,
+        width: u32,
+        height: u32,
+        data: &[u8],
+    ) -> Result<(), Error> {
+        let node = self
+            .graph
+            .node_weight_mut(index)
+            .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
+
+        let outputs = node.output_values_mut();
+        let output = outputs.get_mut(slot).ok_or(Error::NoOutputSlot(slot))?;
+
+        let Value::Texture(handle) = output else {
+            return Err(Error::Script("Output is not a texture".into()));
+        };
+
+        if let Some(old_id) = handle.id {
+            self.ctx.textures.release_texture(old_id);
+        }
+
+        handle.width = width;
+        handle.height = height;
+
+        let id = self.ctx.textures.alloc_texture_with_data(
+            &self.ctx.device,
+            &self.ctx.queue,
+            index,
+            handle,
+            data,
+        );
+
+        handle.id = Some(id);
+
+        self.emit(Event::GraphDirtied);
+        Ok(())
+    }
+
+    /// Sync texture allocations after configure. Preserves IDs where possible.
     fn sync_output_textures(&mut self, index: NodeIndex, old_outputs: &[Value]) {
         let new_len = self.graph[index].output_values_mut().len();
 
@@ -695,23 +756,13 @@ impl Engine {
             let Value::Texture(handle) = output else {
                 continue;
             };
-
-            if handle.id.is_some() {
-                continue;
-            }
-
-            if let Some(Value::Texture(old)) = old_outputs.get(slot)
-                && let Some(old_id) = old.id
-            {
-                if handle.structurally_identical(old) {
-                    handle.id = Some(old_id);
-                    continue;
+            // Transfer ID from old handle if it exists
+            if handle.id.is_none() {
+                if let Some(Value::Texture(old)) = old_outputs.get(slot) {
+                    handle.id = old.id;
                 }
-                self.ctx.textures.release(old_id);
             }
-
-            let id = self.ctx.textures.allocate(&self.ctx.device, index, handle);
-            handle.id = Some(id);
+            self.ctx.ensure_texture(handle);
         }
 
         // Release orphaned textures from removed slots
@@ -719,7 +770,7 @@ impl Engine {
             if let Value::Texture(h) = old
                 && let Some(id) = h.id
             {
-                self.ctx.textures.release(id);
+                self.ctx.textures.release_texture(id);
             }
         }
     }

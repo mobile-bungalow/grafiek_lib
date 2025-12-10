@@ -55,7 +55,6 @@ pub fn code_editor_field(ui: &mut Ui, id: Id, code: &mut String, kind: &StringKi
         })
         .response;
 
-    // Popup window (rendered at context level, independent of collapsing header)
     if popup_open {
         let mut open = true;
         egui::Window::new("Code Editor")

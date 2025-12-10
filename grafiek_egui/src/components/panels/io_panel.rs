@@ -1,5 +1,5 @@
 use egui::{RichText, ScrollArea};
-use grafiek_engine::Engine;
+use grafiek_engine::{Engine, ExtendedMetadata, TextureMeta, ValueType};
 
 pub fn show_io_panel(
     ctx: &egui::Context,
@@ -40,21 +40,43 @@ pub fn show_io_panel(
                     ui.heading("Inputs");
                     ui.separator();
 
-                    let input_nodes: Vec<_> = engine
-                        .inputs()
-                        .map(|idx| {
-                            let node = engine.get_node(idx).unwrap();
-                            let label = node.label().to_string();
-                            (idx, label)
-                        })
-                        .collect();
+                    let input_indices: Vec<_> = engine.inputs().collect();
+                    for idx in input_indices {
+                        let Some(node) = engine.get_node(idx) else {
+                            continue;
+                        };
+                        let label = node.label().to_string();
+                        let sig = node.signature();
 
-                    for (input_idx, label) in input_nodes {
+                        // Find texture output slots with allow_file
+                        let texture_slot = (0..sig.output_count()).find(|&i| {
+                            sig.output(i).is_some_and(|slot| {
+                                matches!(
+                                    (slot.value_type(), slot.extended()),
+                                    (
+                                        ValueType::Texture,
+                                        ExtendedMetadata::Texture(TextureMeta {
+                                            allow_file: true,
+                                            ..
+                                        })
+                                    )
+                                )
+                            })
+                        });
+
                         ui.horizontal(|ui| {
                             ui.label(&label);
-                            let _ = engine.edit_graph_input(input_idx, |slot_def, value| {
-                                crate::components::value::value_editor(ui, slot_def, value);
-                            });
+                            if let Some(slot) = texture_slot {
+                                if ui.button("Load Image...").clicked() {
+                                    crate::components::image_picker::pick_and_load_image(
+                                        engine, idx, slot,
+                                    );
+                                }
+                            } else {
+                                let _ = engine.edit_graph_input(idx, |slot_def, value| {
+                                    crate::components::value::value_editor(ui, slot_def, value);
+                                });
+                            }
                         });
                     }
 
@@ -66,7 +88,7 @@ pub fn show_io_panel(
                         if let Some(node) = engine.get_node(output_idx) {
                             ui.horizontal(|ui| {
                                 ui.label(node.label());
-                                if let Some(value) = node.input_value(0) {
+                                if let Some((_, value)) = node.input(0) {
                                     ui.label(format!("{}", value));
                                 }
                             });

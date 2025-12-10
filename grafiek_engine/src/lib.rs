@@ -13,6 +13,7 @@ pub mod traits;
 
 pub use engine::*;
 pub use gpu_pool::TextureId;
+pub use node::Node;
 pub use registry::*;
 pub use value::*;
 

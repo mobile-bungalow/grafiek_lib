@@ -15,21 +15,23 @@ fn main() -> Result<()> {
 
     log::info!("Starting Grafiek Egui");
 
+    let desc = |_: &wgpu::Adapter| wgpu::DeviceDescriptor {
+        label: Some("grafiek device"),
+        required_features: wgpu::Features::PUSH_CONSTANTS,
+        required_limits: wgpu::Limits {
+            max_push_constant_size: 128,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let setup = eframe::egui_wgpu::WgpuSetupCreateNew {
+        device_descriptor: Arc::new(desc),
+        ..Default::default()
+    };
+
     let wgpu_options = eframe::egui_wgpu::WgpuConfiguration {
-        wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
-            eframe::egui_wgpu::WgpuSetupCreateNew {
-                device_descriptor: Arc::new(|_adapter| wgpu::DeviceDescriptor {
-                    label: Some("grafiek device"),
-                    required_features: wgpu::Features::PUSH_CONSTANTS,
-                    required_limits: wgpu::Limits {
-                        max_push_constant_size: 128,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        ),
+        wgpu_setup: setup.into(),
         ..Default::default()
     };
 
@@ -44,19 +46,10 @@ fn main() -> Result<()> {
         "Grafiek",
         options,
         Box::new(|cc| {
-            let Some(render_state) = cc.wgpu_render_state.as_ref() else {
-                return Err("WGPU unitialized".into());
-            };
-
-            let device = render_state.device.clone();
-            let queue = render_state.queue.clone();
-
-            let app = GrafiekApp::init(device, queue).context("failed to initialize app")?;
-
+            let render_state = cc.wgpu_render_state.clone().ok_or("WGPU uninitialized")?;
+            let app = GrafiekApp::init(Arc::new(render_state)).context("failed to initialize app")?;
             Ok(Box::new(app))
         }),
     )
-    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-
-    Ok(())
+    .map_err(|e| anyhow::anyhow!("{e:?}"))
 }

@@ -106,8 +106,8 @@ fn add_with_node_inputs() {
     engine.execute();
 
     let output_node = engine.get_node(output).unwrap();
-    match output_node.input_value(0) {
-        Some(Value::F32(v)) => assert_eq!(*v, 7.0),
+    match output_node.input(0) {
+        Some((_, Value::F32(v))) => assert_eq!(*v, 7.0),
         _ => panic!("expected F32"),
     }
 }

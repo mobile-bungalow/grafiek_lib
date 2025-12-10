@@ -1,5 +1,5 @@
 mod code_editor;
-mod image_preview;
+pub mod image_preview;
 
 use egui::{Id, Response, Ui};
 use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut};

@@ -1,9 +1,11 @@
 mod background;
 mod pin;
 
-use egui::Pos2;
+use std::sync::Arc;
+
+use egui::{Pos2, Vec2};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
-use grafiek_engine::{Engine, NodeIndex};
+use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
 
 use pin::{PinInfo, PinSide};
 
@@ -11,10 +13,13 @@ pub mod style;
 pub use style::style;
 
 use crate::app::ViewState;
+use crate::components::value::image_preview::TextureCache;
 
 pub struct SnarlView<'a> {
     pub view: &'a mut ViewState,
     pub engine: &'a mut Engine,
+    pub texture_cache: &'a mut TextureCache,
+    pub render_state: &'a Arc<eframe::egui_wgpu::RenderState>,
 }
 
 #[derive(Clone)]
@@ -47,6 +52,19 @@ impl SnarlState {
     pub fn cleanup_node(&mut self, _node: egui_snarl::NodeId, engine_idx: NodeIndex) {
         self.engine_to_snarl.remove(&engine_idx);
     }
+}
+
+/// Check if a node has any texture outputs marked with preview: true
+fn has_preview_output(node: &grafiek_engine::Node) -> bool {
+    node.outputs().any(|(slot_def, _)| {
+        matches!(
+            (slot_def.value_type(), slot_def.extended()),
+            (
+                ValueType::Texture,
+                ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
+            )
+        )
+    })
 }
 
 impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
@@ -123,10 +141,20 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
     }
 
     fn has_body(&mut self, node: &NodeData) -> bool {
-        self.engine
-            .get_node(node.engine_node)
-            .map(|n| n.has_body_config())
-            .unwrap_or(false)
+        let Some(n) = self.engine.get_node(node.engine_node) else {
+            log::debug!("has_body: node {:?} not found", node.engine_node);
+            return false;
+        };
+        let has_body_config = n.has_body_config();
+        let has_preview = has_preview_output(n);
+        log::debug!(
+            "has_body: node {:?} has_body_config={} has_preview={}",
+            node.engine_node,
+            has_body_config,
+            has_preview
+        );
+        // Show body if there are body configs or preview-enabled texture outputs
+        has_body_config || has_preview
     }
 
     fn show_body(
@@ -168,6 +196,101 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                         ui.add_space(10.0);
                     });
             });
+        }
+
+        // Show texture preview for outputs with preview: true
+        let Some(engine_node) = self.engine.get_node(idx) else {
+            log::debug!("show_body: node {:?} not found for preview", idx);
+            return;
+        };
+
+        log::debug!(
+            "show_body: checking {} outputs for node {:?}",
+            engine_node.output_count(),
+            idx
+        );
+
+        for (slot_def, value) in engine_node.outputs() {
+            log::debug!(
+                "show_body: output '{}' type={:?} extended={:?}",
+                slot_def.name(),
+                slot_def.value_type(),
+                slot_def.extended()
+            );
+
+            // Only show outputs marked with preview: true
+            let is_preview = matches!(
+                (slot_def.value_type(), slot_def.extended()),
+                (
+                    ValueType::Texture,
+                    ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
+                )
+            );
+            if !is_preview {
+                log::debug!(
+                    "show_body: output '{}' is not a preview output",
+                    slot_def.name()
+                );
+                continue;
+            }
+
+            log::debug!(
+                "show_body: output '{}' IS a preview output",
+                slot_def.name()
+            );
+
+            let Value::Texture(handle) = value else {
+                log::debug!(
+                    "show_body: output '{}' value is not a texture",
+                    slot_def.name()
+                );
+                continue;
+            };
+            let Some(tex_id) = handle.id() else {
+                log::debug!("show_body: output '{}' has no texture id", slot_def.name());
+                continue;
+            };
+            let Some(wgpu_tex) = self.engine.get_texture(handle) else {
+                log::debug!(
+                    "show_body: output '{}' texture not found in engine",
+                    slot_def.name()
+                );
+                continue;
+            };
+
+            log::debug!(
+                "show_body: rendering preview for output '{}' - texture size {}x{}, tex_id={:?}",
+                slot_def.name(),
+                handle.width(),
+                handle.height(),
+                tex_id
+            );
+
+            let egui_tex =
+                self.texture_cache
+                    .get_or_register(ui.ctx(), self.render_state, tex_id, wgpu_tex);
+
+            log::debug!("show_body: egui texture id = {:?}", egui_tex);
+
+            let aspect = handle.width() as f32 / handle.height() as f32;
+            let max_width = 150.0;
+            let size = Vec2::new(max_width, max_width / aspect);
+
+            log::debug!("show_body: image size = {:?}", size);
+            log::debug!("show_body: ui available size = {:?}", ui.available_size());
+
+            ui.add_space(4.0);
+
+            // Debug: draw a red rect first to see if it shows
+            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+            log::debug!("show_body: allocated rect = {:?}", rect);
+            ui.painter().rect_filled(rect, 0.0, egui::Color32::RED);
+            ui.painter().image(
+                egui_tex,
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
         }
     }
 

@@ -1,17 +1,20 @@
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{
+    Arc,
+    mpsc::{self, Receiver, Sender},
+};
 
 use anyhow::Result;
 use egui_notify::Toasts;
 use egui_snarl::Snarl;
 use grafiek_engine::history::{Event, Message, Mutation};
 use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
-use wgpu::{Device, Queue};
 
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
     panels::{show_inspector_panel, show_io_panel, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
+    value::image_preview::TextureCache,
 };
 
 #[derive(Default)]
@@ -35,11 +38,18 @@ pub struct GrafiekApp {
     pub snarl: Snarl<snarl::NodeData>,
     /// Message receiver from engine
     message_rx: Receiver<Message>,
+    /// Cache for displaying engine textures in egui
+    pub texture_cache: TextureCache,
+    /// Reference to wgpu render state for texture registration
+    render_state: Arc<eframe::egui_wgpu::RenderState>,
 }
 
 impl GrafiekApp {
-    pub fn init(device: Device, queue: Queue) -> Result<Self> {
+    pub fn init(render_state: Arc<eframe::egui_wgpu::RenderState>) -> Result<Self> {
         let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
+
+        let device = render_state.device.clone();
+        let queue = render_state.queue.clone();
 
         let engine = Engine::init(EngineDescriptor {
             device,
@@ -54,12 +64,28 @@ impl GrafiekApp {
             view_state: Default::default(),
             snarl: Default::default(),
             message_rx: rx,
+            texture_cache: TextureCache::new(),
+            render_state,
         })
     }
 
     pub fn needs_save(&self) -> bool {
         // TODO: check save state
         true
+    }
+
+    /// Get an egui texture ID for displaying an engine texture.
+    pub fn get_egui_texture(
+        &mut self,
+        ctx: &egui::Context,
+        handle: &grafiek_engine::TextureHandle,
+    ) -> Option<egui::TextureId> {
+        let engine_id = handle.id()?;
+        let wgpu_texture = self.engine.get_texture(handle)?;
+        Some(
+            self.texture_cache
+                .get_or_register(ctx, &self.render_state, engine_id, wgpu_texture),
+        )
     }
 
     pub fn save_project(&mut self) {
@@ -185,6 +211,8 @@ impl eframe::App for GrafiekApp {
             let view = &mut SnarlView {
                 view: &mut self.view_state,
                 engine: &mut self.engine,
+                texture_cache: &mut self.texture_cache,
+                render_state: &self.render_state,
             };
 
             self.snarl.show(view, &snarl::style(), "snarl", ui);
@@ -193,6 +221,8 @@ impl eframe::App for GrafiekApp {
         show_io_panel(
             ctx,
             &mut self.engine,
+            &mut self.texture_cache,
+            &self.render_state,
             &mut self.view_state.show_io,
             top_panel_height,
         );

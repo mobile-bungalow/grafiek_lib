@@ -1,9 +1,15 @@
-use egui::{RichText, ScrollArea};
-use grafiek_engine::{Engine, ExtendedMetadata, TextureMeta, ValueType};
+use std::sync::Arc;
+
+use egui::{RichText, ScrollArea, Vec2};
+use grafiek_engine::{Engine, ExtendedMetadata, TextureMeta, Value, ValueType};
+
+use crate::components::value::image_preview::TextureCache;
 
 pub fn show_io_panel(
     ctx: &egui::Context,
     engine: &mut Engine,
+    texture_cache: &mut TextureCache,
+    render_state: &Arc<eframe::egui_wgpu::RenderState>,
     visible: &mut bool,
     top_panel_height: f32,
 ) {
@@ -64,20 +70,39 @@ pub fn show_io_panel(
                             })
                         });
 
-                        ui.horizontal(|ui| {
-                            ui.label(&label);
-                            if let Some(slot) = texture_slot {
-                                if ui.button("Load Image...").clicked() {
-                                    crate::components::image_picker::pick_and_load_image(
-                                        engine, idx, slot,
-                                    );
+                        ui.label(&label);
+
+                        if let Some(slot) = texture_slot {
+                            // Show preview if texture is loaded
+                            if let Some((_, Value::Texture(handle))) = node.output(slot) {
+                                if let Some(tex_id) = handle.id() {
+                                    if let Some(wgpu_tex) = engine.get_texture(handle) {
+                                        let egui_tex = texture_cache.get_or_register(
+                                            ctx,
+                                            render_state,
+                                            tex_id,
+                                            wgpu_tex,
+                                        );
+                                        let aspect = handle.width() as f32 / handle.height() as f32;
+                                        let max_width = 230.0;
+                                        let size = Vec2::new(max_width, max_width / aspect);
+                                        ui.image(egui::load::SizedTexture::new(egui_tex, size));
+                                    }
                                 }
-                            } else {
-                                let _ = engine.edit_graph_input(idx, |slot_def, value| {
-                                    crate::components::value::value_editor(ui, slot_def, value);
-                                });
                             }
-                        });
+
+                            if ui.button("Load Image...").clicked() {
+                                crate::components::image_picker::pick_and_load_image(
+                                    engine, idx, slot,
+                                );
+                            }
+                        } else {
+                            let _ = engine.edit_graph_input(idx, |slot_def, value| {
+                                crate::components::value::value_editor(ui, slot_def, value);
+                            });
+                        }
+
+                        ui.add_space(8.0);
                     }
 
                     ui.add_space(20.0);
@@ -85,14 +110,33 @@ pub fn show_io_panel(
                     ui.separator();
 
                     for output_idx in engine.outputs() {
-                        if let Some(node) = engine.get_node(output_idx) {
-                            ui.horizontal(|ui| {
-                                ui.label(node.label());
-                                if let Some((_, value)) = node.input(0) {
-                                    ui.label(format!("{}", value));
+                        let Some(node) = engine.get_node(output_idx) else {
+                            continue;
+                        };
+
+                        ui.label(node.label());
+
+                        // Show texture preview for output nodes
+                        if let Some((_, Value::Texture(handle))) = node.input(0) {
+                            if let Some(tex_id) = handle.id() {
+                                if let Some(wgpu_tex) = engine.get_texture(handle) {
+                                    let egui_tex = texture_cache.get_or_register(
+                                        ctx,
+                                        render_state,
+                                        tex_id,
+                                        wgpu_tex,
+                                    );
+                                    let aspect = handle.width() as f32 / handle.height() as f32;
+                                    let max_width = 230.0;
+                                    let size = Vec2::new(max_width, max_width / aspect);
+                                    ui.image(egui::load::SizedTexture::new(egui_tex, size));
                                 }
-                            });
+                            }
+                        } else if let Some((_, value)) = node.input(0) {
+                            ui.label(format!("{}", value));
                         }
+
+                        ui.add_space(8.0);
                     }
                 });
             });

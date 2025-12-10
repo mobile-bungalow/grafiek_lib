@@ -30,11 +30,9 @@ impl ExecutionContext {
     pub fn ensure_texture(&mut self, handle: &mut TextureHandle) {
         match handle.id {
             None => {
-                log::debug!("ho!");
                 handle.id = Some(self.textures.alloc_texture(&self.device, handle));
             }
             Some(id) => {
-                log::debug!("ha!");
                 let needs_resize = self.textures.get_texture(id).map_or(false, |tex| {
                     let size = tex.size();
                     size.width != handle.width || size.height != handle.height

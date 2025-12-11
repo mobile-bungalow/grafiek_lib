@@ -1,4 +1,4 @@
-use egui_snarl::ui::{NodeLayout, NodeLayoutKind, SnarlStyle};
+use egui_snarl::ui::{NodeLayout, NodeLayoutKind, SelectionStyle, SnarlStyle};
 
 pub const fn style() -> SnarlStyle {
     let mut style = egui_snarl::ui::SnarlStyle::new();
@@ -10,6 +10,13 @@ pub const fn style() -> SnarlStyle {
         fill: egui::Color32::from_gray(30),
         stroke: egui::Stroke::NONE,
         shadow: egui::Shadow::NONE,
+    });
+
+    style.select_style = Some(SelectionStyle {
+        stroke: egui::Stroke {
+            width: 2.0,
+            color: crate::consts::colors::SELECTED,
+        },
     });
 
     style.node_layout = Some(NodeLayout {

@@ -3,7 +3,7 @@ mod pin;
 
 use std::sync::Arc;
 
-use egui::{Pos2, Vec2};
+use egui::{Color32, Pos2, Stroke, Vec2};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
 use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
 
@@ -14,6 +14,7 @@ pub use style::style;
 
 use crate::app::ViewState;
 use crate::components::value::image_preview::TextureCache;
+use crate::consts::colors::{INSPECTED, SELECTED};
 
 pub struct SnarlView<'a> {
     pub view: &'a mut ViewState,
@@ -99,25 +100,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         self.engine
             .get_node(node.engine_node)
             .map_or(0, |n| n.output_count())
-    }
-
-    fn node_frame(
-        &mut self,
-        default: egui::Frame,
-        node: egui_snarl::NodeId,
-        _inputs: &[InPin],
-        _outputs: &[OutPin],
-        snarl: &Snarl<NodeData>,
-    ) -> egui::Frame {
-        let Some(data) = snarl.get_node(node) else {
-            return default;
-        };
-
-        if self.view.show_inspect_node == Some(data.engine_node) {
-            return default.stroke(egui::Stroke::new(2.0, crate::consts::colors::SELECTED));
-        }
-
-        default
     }
 
     fn header_frame(
@@ -351,6 +333,28 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
     fn has_node_menu(&mut self, _node: &NodeData) -> bool {
         true
+    }
+
+    fn node_frame(
+        &mut self,
+        default: egui::Frame,
+        node: egui_snarl::NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        snarl: &Snarl<NodeData>,
+    ) -> egui::Frame {
+        let Some(node) = snarl.get_node(node) else {
+            return default;
+        };
+
+        if self.view.show_inspect_node == Some(node.engine_node) {
+            default.stroke(Stroke {
+                width: 2.0,
+                color: INSPECTED,
+            })
+        } else {
+            default
+        }
     }
 
     fn show_node_menu(

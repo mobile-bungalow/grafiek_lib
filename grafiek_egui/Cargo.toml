@@ -11,7 +11,7 @@ eframe = { version = "0.33.2", default-features = false, features = ["default_fo
 wgpu = { version = "27", default-features = false, features = ["metal", "vulkan", "dx12", "wgsl", "glsl"] }
 egui_logger = "0.9.0"
 egui-notify = "0.21.0"
-egui-snarl = "0.9"
+egui-snarl = { version = "0.9" , git = "https://github.com/mobile-bungalow/egui-snarl" }
 egui_code_editor = "0.2"
 log = "0.4"
 env_logger = "0.11"

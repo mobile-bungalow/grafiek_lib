@@ -6,6 +6,7 @@ use std::sync::{
 use anyhow::Result;
 use egui_notify::Toasts;
 use egui_snarl::Snarl;
+use egui_snarl::ui::get_selected_nodes;
 use grafiek_engine::history::{Event, Message, Mutation};
 use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
 
@@ -206,7 +207,8 @@ impl eframe::App for GrafiekApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.view_state.snarl_ui.snarl_id = Some(ui.make_persistent_id("snarl"));
+            let snarl_id = ui.make_persistent_id("snarl");
+            self.view_state.snarl_ui.snarl_id = Some(snarl_id);
 
             let view = &mut SnarlView {
                 view: &mut self.view_state,
@@ -216,6 +218,21 @@ impl eframe::App for GrafiekApp {
             };
 
             self.snarl.show(view, &snarl::style(), "snarl", ui);
+
+            // Promote single selection to inspected
+            let selected = get_selected_nodes(snarl_id, ctx);
+            if selected.len() == 1 {
+                let selected_snarl_id = selected[0];
+                if let Some((&engine_idx, _)) = self
+                    .view_state
+                    .snarl_ui
+                    .engine_to_snarl
+                    .iter()
+                    .find(|&(_, &s)| s == selected_snarl_id)
+                {
+                    self.view_state.show_inspect_node = Some(engine_idx);
+                }
+            }
         });
 
         show_io_panel(

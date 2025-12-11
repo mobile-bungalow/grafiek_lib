@@ -3,7 +3,7 @@ mod pin;
 
 use std::sync::Arc;
 
-use egui::{Color32, Pos2, Stroke, Vec2};
+use egui::{Pos2, Stroke, Vec2};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
 use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
 
@@ -14,7 +14,7 @@ pub use style::style;
 
 use crate::app::ViewState;
 use crate::components::value::image_preview::TextureCache;
-use crate::consts::colors::{INSPECTED, SELECTED};
+use crate::consts::colors::INSPECTED;
 
 pub struct SnarlView<'a> {
     pub view: &'a mut ViewState,
@@ -129,12 +129,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         };
         let has_body_config = n.has_body_config();
         let has_preview = has_preview_output(n);
-        log::debug!(
-            "has_body: node {:?} has_body_config={} has_preview={}",
-            node.engine_node,
-            has_body_config,
-            has_preview
-        );
+
         // Show body if there are body configs or preview-enabled texture outputs
         has_body_config || has_preview
     }
@@ -182,24 +177,10 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
         // Show texture preview for outputs with preview: true
         let Some(engine_node) = self.engine.get_node(idx) else {
-            log::debug!("show_body: node {:?} not found for preview", idx);
             return;
         };
 
-        log::debug!(
-            "show_body: checking {} outputs for node {:?}",
-            engine_node.output_count(),
-            idx
-        );
-
         for (slot_def, value) in engine_node.outputs() {
-            log::debug!(
-                "show_body: output '{}' type={:?} extended={:?}",
-                slot_def.name(),
-                slot_def.value_type(),
-                slot_def.extended()
-            );
-
             // Only show outputs marked with preview: true
             let is_preview = matches!(
                 (slot_def.value_type(), slot_def.extended()),
@@ -209,44 +190,20 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                 )
             );
             if !is_preview {
-                log::debug!(
-                    "show_body: output '{}' is not a preview output",
-                    slot_def.name()
-                );
                 continue;
             }
 
-            log::debug!(
-                "show_body: output '{}' IS a preview output",
-                slot_def.name()
-            );
-
             let Value::Texture(handle) = value else {
-                log::debug!(
-                    "show_body: output '{}' value is not a texture",
-                    slot_def.name()
-                );
-                continue;
-            };
-            let Some(tex_id) = handle.id() else {
-                log::debug!("show_body: output '{}' has no texture id", slot_def.name());
-                continue;
-            };
-            let Some(wgpu_tex) = self.engine.get_texture(handle) else {
-                log::debug!(
-                    "show_body: output '{}' texture not found in engine",
-                    slot_def.name()
-                );
                 continue;
             };
 
-            log::debug!(
-                "show_body: rendering preview for output '{}' - texture size {}x{}, tex_id={:?}",
-                slot_def.name(),
-                handle.width(),
-                handle.height(),
-                tex_id
-            );
+            let Some(tex_id) = handle.id() else {
+                continue;
+            };
+
+            let Some(wgpu_tex) = self.engine.get_texture(handle) else {
+                continue;
+            };
 
             let egui_tex =
                 self.texture_cache
@@ -257,15 +214,11 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             let aspect = handle.width() as f32 / handle.height() as f32;
             let max_width = 150.0;
             let size = Vec2::new(max_width, max_width / aspect);
-
-            log::debug!("show_body: image size = {:?}", size);
-            log::debug!("show_body: ui available size = {:?}", ui.available_size());
-
             ui.add_space(4.0);
 
             // Debug: draw a red rect first to see if it shows
             let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-            log::debug!("show_body: allocated rect = {:?}", rect);
+
             ui.painter().rect_filled(rect, 0.0, egui::Color32::RED);
             ui.painter().image(
                 egui_tex,

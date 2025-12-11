@@ -7,7 +7,7 @@ use egui::{Pos2, Stroke, Vec2};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
 use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
 
-use pin::{PinInfo, PinSide};
+pub use pin::{PinInfo, PinShape, PinSide};
 
 pub mod style;
 pub use style::style;
@@ -53,19 +53,6 @@ impl SnarlState {
     pub fn cleanup_node(&mut self, _node: egui_snarl::NodeId, engine_idx: NodeIndex) {
         self.engine_to_snarl.remove(&engine_idx);
     }
-}
-
-/// Check if a node has any texture outputs marked with preview: true
-fn has_preview_output(node: &grafiek_engine::Node) -> bool {
-    node.outputs().any(|(slot_def, _)| {
-        matches!(
-            (slot_def.value_type(), slot_def.extended()),
-            (
-                ValueType::Texture,
-                ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
-            )
-        )
-    })
 }
 
 impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
@@ -124,14 +111,9 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
     fn has_body(&mut self, node: &NodeData) -> bool {
         let Some(n) = self.engine.get_node(node.engine_node) else {
-            log::debug!("has_body: node {:?} not found", node.engine_node);
             return false;
         };
-        let has_body_config = n.has_body_config();
-        let has_preview = has_preview_output(n);
-
-        // Show body if there are body configs or preview-enabled texture outputs
-        has_body_config || has_preview
+        n.has_body_config()
     }
 
     fn show_body(
@@ -174,59 +156,6 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                     });
             });
         }
-
-        // Show texture preview for outputs with preview: true
-        let Some(engine_node) = self.engine.get_node(idx) else {
-            return;
-        };
-
-        for (slot_def, value) in engine_node.outputs() {
-            // Only show outputs marked with preview: true
-            let is_preview = matches!(
-                (slot_def.value_type(), slot_def.extended()),
-                (
-                    ValueType::Texture,
-                    ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
-                )
-            );
-            if !is_preview {
-                continue;
-            }
-
-            let Value::Texture(handle) = value else {
-                continue;
-            };
-
-            let Some(tex_id) = handle.id() else {
-                continue;
-            };
-
-            let Some(wgpu_tex) = self.engine.get_texture(handle) else {
-                continue;
-            };
-
-            let egui_tex =
-                self.texture_cache
-                    .get_or_register(ui.ctx(), self.render_state, tex_id, wgpu_tex);
-
-            log::debug!("show_body: egui texture id = {:?}", egui_tex);
-
-            let aspect = handle.width() as f32 / handle.height() as f32;
-            let max_width = 150.0;
-            let size = Vec2::new(max_width, max_width / aspect);
-            ui.add_space(4.0);
-
-            // Debug: draw a red rect first to see if it shows
-            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-
-            ui.painter().rect_filled(rect, 0.0, egui::Color32::RED);
-            ui.painter().image(
-                egui_tex,
-                rect,
-                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                egui::Color32::WHITE,
-            );
-        }
     }
 
     fn show_input(
@@ -240,18 +169,33 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let slot_idx = pin.id.input;
         let connected = !pin.remotes.is_empty();
 
+        let mut pin_info = PinInfo::default().with_side(PinSide::Left);
+
         let _ = self
             .engine
             .edit_node_input(idx, slot_idx, |slot_def, value| {
+                // Set pin shape based on type
+                pin_info =
+                    pin_info
+                        .clone()
+                        .with_shape(crate::components::value::pin_shape_for_type(
+                            slot_def.value_type(),
+                        ));
+
                 ui.horizontal(|ui| {
                     ui.label(slot_def.name());
                     if !connected {
-                        crate::components::value::value_editor(ui, slot_def, value);
+                        crate::components::value::value_editor_with_pin(
+                            ui,
+                            slot_def,
+                            value,
+                            &mut pin_info,
+                        );
                     }
                 });
             });
 
-        PinInfo::default().with_side(PinSide::Left)
+        pin_info
     }
 
     fn show_output(
@@ -268,16 +212,63 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             return PinInfo::default();
         };
 
-        let Some(slot_def) = engine_node.signature().output(pin.id.output) else {
+        let Some((slot_def, value)) = engine_node.outputs().nth(pin.id.output) else {
             ui.label("out");
             return PinInfo::default();
         };
 
+        let pin_shape = crate::components::value::pin_shape_for_type(slot_def.value_type());
+
+        // Check if this is a texture output with preview enabled and has a valid texture
+        let is_preview = matches!(
+            (slot_def.value_type(), slot_def.extended()),
+            (
+                ValueType::Texture,
+                ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
+            )
+        );
+
+        if is_preview {
+            if let Value::Texture(handle) = value {
+                if let Some(tex_id) = handle.id() {
+                    if let Some(wgpu_tex) = self.engine.get_texture(handle) {
+                        let egui_tex = self.texture_cache.get_or_register(
+                            ui.ctx(),
+                            self.render_state,
+                            tex_id,
+                            wgpu_tex,
+                        );
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(slot_def.name());
+                        });
+
+                        let aspect = handle.width() as f32 / handle.height() as f32;
+                        let max_width = 120.0;
+                        let size = Vec2::new(max_width, max_width / aspect);
+
+                        ui.add_space(4.0);
+                        ui.image(egui::ImageSource::Texture(egui::load::SizedTexture {
+                            id: egui_tex,
+                            size,
+                        }));
+
+                        return PinInfo::default()
+                            .with_side(PinSide::Right)
+                            .with_shape(pin_shape);
+                    }
+                }
+            }
+        }
+
+        // Default: just show label
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.label(slot_def.name());
         });
 
-        PinInfo::default().with_side(PinSide::Right)
+        PinInfo::default()
+            .with_side(PinSide::Right)
+            .with_shape(pin_shape)
     }
 
     fn has_graph_menu(&mut self, _pos: egui::Pos2, _snarl: &mut Snarl<NodeData>) -> bool {

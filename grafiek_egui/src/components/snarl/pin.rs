@@ -14,7 +14,7 @@ pub enum PinSide {
     Right,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct PinInfo {
     pub side: Option<PinSide>,
     pub fill: Option<Color32>,
@@ -33,6 +33,12 @@ impl PinInfo {
     #[must_use]
     pub fn with_side(mut self, side: PinSide) -> Self {
         self.side = Some(side);
+        self
+    }
+
+    #[must_use]
+    pub fn with_shape(mut self, shape: PinShape) -> Self {
+        self.shape = Some(shape);
         self
     }
 }

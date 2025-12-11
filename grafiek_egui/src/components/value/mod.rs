@@ -2,7 +2,31 @@ mod code_editor;
 pub mod image_preview;
 
 use egui::{Id, Response, Ui};
-use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut};
+use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut, ValueType};
+
+use crate::components::snarl::{PinInfo, PinShape};
+
+/// Get the appropriate pin shape for a value type
+pub fn pin_shape_for_type(value_type: ValueType) -> PinShape {
+    match value_type {
+        ValueType::Texture | ValueType::Buffer => PinShape::Diamond,
+        _ => PinShape::Circle,
+    }
+}
+
+/// Value editor that also updates pin shape based on type
+pub fn value_editor_with_pin(
+    ui: &mut Ui,
+    slot: &SlotDef,
+    value: ValueMut,
+    pin: &mut PinInfo,
+) -> Response {
+    // Set pin shape based on value type
+    *pin = pin
+        .clone()
+        .with_shape(pin_shape_for_type(slot.value_type()));
+    value_editor(ui, slot, value)
+}
 
 pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
     // Create a stable ID for this slot
@@ -26,9 +50,9 @@ pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
         ),
         (ValueMut::I32(val), _) => ui.add(egui::DragValue::new(val)),
 
-        (ValueMut::Texture(_), _) => ui.label("Texture"),
+        (ValueMut::Texture(_), _) => ui.label(""),
 
-        (ValueMut::Buffer(_), _) => todo!("Buffer!"),
+        (ValueMut::Buffer(_), _) => ui.label(""),
 
         (ValueMut::String(val), ExtendedMetadata::String(meta)) => {
             code_editor::code_editor_field(ui, slot_id, val, &meta.kind)

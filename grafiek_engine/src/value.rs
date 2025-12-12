@@ -354,7 +354,11 @@ impl fmt::Display for Value {
             Value::I32(v) => write!(f, "{}", v),
             Value::F32(v) => write!(f, "{:.3}", v),
             Value::Texture(h) => match h.id {
-                Some(id) => write!(f, "texture({}x{} {:?} #{})", h.width, h.height, h.fmt, id.0),
+                Some(id) => write!(
+                    f,
+                    "texture({}x{} {:?} #{})",
+                    h.width, h.height, h.fmt, id.stable_id
+                ),
                 None => write!(
                     f,
                     "texture({}x{} {:?} unallocated)",

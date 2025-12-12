@@ -9,7 +9,19 @@ use crate::value::{TextureFormat, TextureHandle};
 
 /// Stable texture identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-pub struct TextureId(pub u64);
+pub struct TextureId {
+    pub stable_id: u64,
+    pub generation: u64,
+}
+
+impl TextureId {
+    pub const fn new(id: u64) -> Self {
+        Self {
+            stable_id: id,
+            generation: 0,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextureOwner {
@@ -26,7 +38,7 @@ struct TextureEntry {
 /// Manages GPU textures and their ownership.
 #[derive(Debug, Default)]
 pub struct GPUResourcePool {
-    textures: HashMap<TextureId, TextureEntry>,
+    textures: HashMap<u64, TextureEntry>,
     next_id: u64,
 }
 
@@ -39,7 +51,10 @@ impl GPUResourcePool {
     }
 
     fn next_id(&mut self) -> TextureId {
-        let id = TextureId(self.next_id);
+        let id = TextureId {
+            stable_id: self.next_id,
+            generation: 0,
+        };
         self.next_id += 1;
         id
     }
@@ -55,7 +70,7 @@ impl GPUResourcePool {
         let id = handle.id.expect("system texture must have predefined ID");
         let texture = create_gpu_texture(device, queue, &handle, data);
         self.textures.insert(
-            id,
+            id.stable_id,
             TextureEntry {
                 texture,
                 owner: TextureOwner::Engine,
@@ -67,7 +82,7 @@ impl GPUResourcePool {
         let id = self.next_id();
         let texture = create_gpu_texture_empty(device, handle);
         self.textures.insert(
-            id,
+            id.stable_id,
             TextureEntry {
                 texture,
                 owner: TextureOwner::Engine,
@@ -87,7 +102,7 @@ impl GPUResourcePool {
         let id = self.next_id();
         let texture = create_gpu_texture(device, queue, handle, data);
         self.textures.insert(
-            id,
+            id.stable_id,
             TextureEntry {
                 texture,
                 owner: TextureOwner::Node(owner),
@@ -97,17 +112,21 @@ impl GPUResourcePool {
     }
 
     pub fn get_texture(&self, id: TextureId) -> Option<&Texture> {
-        self.textures.get(&id).map(|e| &e.texture)
+        self.textures.get(&id.stable_id).map(|e| &e.texture)
     }
 
-    pub fn replace_texture(&mut self, id: TextureId, texture: Texture) {
-        if let Some(entry) = self.textures.get_mut(&id) {
+    // Returns textureId with the generation incremneted
+    pub fn replace_texture(&mut self, id: TextureId, texture: Texture) -> TextureId {
+        if let Some(entry) = self.textures.get_mut(&id.stable_id) {
             entry.texture = texture;
         }
+        let mut id = id;
+        id.generation += 1;
+        id
     }
 
     pub fn release_texture(&mut self, id: TextureId) {
-        self.textures.remove(&id);
+        self.textures.remove(&id.stable_id);
     }
 
     pub fn release_node_textures(&mut self, node: NodeIndex) {

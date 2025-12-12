@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use egui::{RichText, ScrollArea, Vec2};
+use egui::{RichText, ScrollArea};
 use grafiek_engine::{Engine, ExtendedMetadata, TextureMeta, Value, ValueType};
 
-use crate::components::value::image_preview::TextureCache;
+use crate::components::value::image_preview::{self, TextureCache};
 
 pub fn show_io_panel(
     ctx: &egui::Context,
@@ -73,22 +73,15 @@ pub fn show_io_panel(
                         ui.label(&label);
 
                         if let Some(slot) = texture_slot {
-                            // Show preview if texture is loaded
                             if let Some((_, Value::Texture(handle))) = node.output(slot) {
-                                if let Some(tex_id) = handle.id() {
-                                    if let Some(wgpu_tex) = engine.get_texture(handle) {
-                                        let egui_tex = texture_cache.get_or_register(
-                                            ctx,
-                                            render_state,
-                                            tex_id,
-                                            wgpu_tex,
-                                        );
-                                        let aspect = handle.width() as f32 / handle.height() as f32;
-                                        let max_width = 230.0;
-                                        let size = Vec2::new(max_width, max_width / aspect);
-                                        ui.image(egui::load::SizedTexture::new(egui_tex, size));
-                                    }
-                                }
+                                image_preview::show_texture_preview(
+                                    ui,
+                                    engine,
+                                    texture_cache,
+                                    render_state,
+                                    handle,
+                                    230.0,
+                                );
                             }
 
                             if ui.button("Load Image...").clicked() {
@@ -116,24 +109,21 @@ pub fn show_io_panel(
 
                         ui.label(node.label());
 
-                        // Show texture preview for output nodes
-                        if let Some((_, Value::Texture(handle))) = node.input(0) {
-                            if let Some(tex_id) = handle.id() {
-                                if let Some(wgpu_tex) = engine.get_texture(handle) {
-                                    let egui_tex = texture_cache.get_or_register(
-                                        ctx,
-                                        render_state,
-                                        tex_id,
-                                        wgpu_tex,
-                                    );
-                                    let aspect = handle.width() as f32 / handle.height() as f32;
-                                    let max_width = 230.0;
-                                    let size = Vec2::new(max_width, max_width / aspect);
-                                    ui.image(egui::load::SizedTexture::new(egui_tex, size));
-                                }
+                        match node.input(0) {
+                            Some((_, Value::Texture(handle))) => {
+                                image_preview::show_texture_preview(
+                                    ui,
+                                    engine,
+                                    texture_cache,
+                                    render_state,
+                                    handle,
+                                    230.0,
+                                );
                             }
-                        } else if let Some((_, value)) = node.input(0) {
-                            ui.label(format!("{}", value));
+                            Some((_, value)) => {
+                                ui.label(format!("{}", value));
+                            }
+                            None => {}
                         }
 
                         ui.add_space(8.0);

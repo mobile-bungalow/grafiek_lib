@@ -9,7 +9,7 @@ use crate::value::{Config, Inputs, Outputs};
 use crate::{ExecutionContext, SignatureRegistery, SlotDef, Value, ValueMut};
 
 /// Engine provided unique ID
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct NodeId(pub u64);
 
 /// Serializable record of a node's state - can be saved to disk or undo queue
@@ -319,7 +319,7 @@ impl Node {
         Ok(t)
     }
 
-    pub fn edit_config<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
+    pub(crate) fn edit_config<F, T>(&mut self, idx: usize, f: F) -> Result<T, Error>
     where
         F: FnOnce(&SlotDef, ValueMut) -> T,
     {

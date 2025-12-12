@@ -30,7 +30,7 @@ impl ExecutionContext {
     pub fn ensure_texture(&mut self, handle: &mut TextureHandle) {
         match handle.id {
             None => {
-                handle.id = Some(self.textures.alloc_texture(&self.device, handle));
+                handle.id = self.textures.alloc_texture(&self.device, handle).into();
             }
             Some(id) => {
                 let needs_resize = self.textures.get_texture(id).map_or(false, |tex| {
@@ -39,7 +39,7 @@ impl ExecutionContext {
                 });
                 if needs_resize {
                     let texture = create_gpu_texture_empty(&self.device, handle);
-                    self.textures.replace_texture(id, texture);
+                    handle.id = self.textures.replace_texture(id, texture).into();
                 }
             }
         }
@@ -65,6 +65,7 @@ pub struct EngineDescriptor {
 
 /// The main entry point into the library
 pub struct Engine {
+    errors: HashMap<NodeIndex, Vec<Error>>,
     // The underlying graph model
     graph: StableDiGraph<Node, Edge>,
     // Searchable list of operator factories
@@ -101,6 +102,7 @@ impl Engine {
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
+            errors: HashMap::default(),
         };
 
         log::info!("loading grafiek::core operators");
@@ -552,11 +554,12 @@ impl Engine {
     pub fn execute(&mut self) {
         self.emit(Event::ExecutionStarted);
 
+        self.errors.clear();
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {
             if let Err(e) = self.graph[node].execute(&mut self.ctx) {
-                // TODO: emit error state here
                 log::error!("Node execution failed: {e}");
+                self.errors.entry(node).or_default().push(e);
             }
 
             self.emit(Event::NodeExecuted { node });

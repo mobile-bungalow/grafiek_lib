@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use egui::{TextureId as EguiTextureId, Vec2};
-use grafiek_engine::TextureId;
+use grafiek_engine::{Engine, TextureHandle, TextureId};
 
 struct CachedTexture {
     egui_id: EguiTextureId,
@@ -11,6 +12,28 @@ struct CachedTexture {
 #[derive(Default)]
 pub struct TextureCache {
     cache: HashMap<TextureId, CachedTexture>,
+}
+
+pub fn show_texture_preview(
+    ui: &mut egui::Ui,
+    engine: &Engine,
+    texture_cache: &mut TextureCache,
+    render_state: &Arc<eframe::egui_wgpu::RenderState>,
+    handle: &TextureHandle,
+    max_width: f32,
+) -> bool {
+    let Some(tex_id) = handle.id() else {
+        return false;
+    };
+    let Some(wgpu_tex) = engine.get_texture(handle) else {
+        return false;
+    };
+
+    let egui_tex = texture_cache.get_or_register(ui.ctx(), render_state, tex_id, wgpu_tex);
+    let aspect = handle.width() as f32 / handle.height() as f32;
+    let size = Vec2::new(max_width, max_width / aspect);
+    ui.image(egui::load::SizedTexture::new(egui_tex, size));
+    true
 }
 
 impl TextureCache {
@@ -74,25 +97,4 @@ impl TextureCache {
         }
         self.cache.clear();
     }
-}
-
-pub fn texture_preview(
-    ui: &mut egui::Ui,
-    texture_id: EguiTextureId,
-    width: u32,
-    height: u32,
-    max_size: f32,
-) -> egui::Response {
-    let aspect = width as f32 / height as f32;
-
-    let size = if width > height {
-        Vec2::new(max_size, max_size / aspect)
-    } else {
-        Vec2::new(max_size * aspect, max_size)
-    };
-
-    ui.image(egui::ImageSource::Texture(egui::load::SizedTexture {
-        id: texture_id,
-        size,
-    }))
 }

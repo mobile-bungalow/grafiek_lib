@@ -3,7 +3,7 @@ use crate::value::{TextureFormat, TextureHandle};
 
 /// 1x1 black texture.
 pub const SPECK: TextureHandle = TextureHandle {
-    id: Some(TextureId(0)),
+    id: Some(TextureId::new(0)),
     width: 1,
     height: 1,
     fmt: TextureFormat::RGBAu8,
@@ -11,7 +11,7 @@ pub const SPECK: TextureHandle = TextureHandle {
 
 /// 1x1 white texture.
 pub const FLECK: TextureHandle = TextureHandle {
-    id: Some(TextureId(1)),
+    id: Some(TextureId::new(1)),
     width: 1,
     height: 1,
     fmt: TextureFormat::RGBAu8,
@@ -19,7 +19,7 @@ pub const FLECK: TextureHandle = TextureHandle {
 
 /// 1x1 transparent texture.
 pub const TRANSPARENT_SPECK: TextureHandle = TextureHandle {
-    id: Some(TextureId(2)),
+    id: Some(TextureId::new(2)),
     width: 1,
     height: 1,
     fmt: TextureFormat::RGBAu8,
@@ -27,7 +27,7 @@ pub const TRANSPARENT_SPECK: TextureHandle = TextureHandle {
 
 /// 2x2 black/magenta check pattern.
 pub const CHECK: TextureHandle = TextureHandle {
-    id: Some(TextureId(3)),
+    id: Some(TextureId::new(3)),
     width: 2,
     height: 2,
     fmt: TextureFormat::RGBAu8,

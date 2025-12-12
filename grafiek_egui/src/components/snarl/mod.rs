@@ -3,7 +3,7 @@ mod pin;
 
 use std::sync::Arc;
 
-use egui::{Pos2, Stroke, Vec2};
+use egui::{Pos2, Stroke};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
 use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
 
@@ -13,7 +13,7 @@ pub mod style;
 pub use style::style;
 
 use crate::app::ViewState;
-use crate::components::value::image_preview::TextureCache;
+use crate::components::value::image_preview::{self, TextureCache};
 use crate::consts::colors::INSPECTED;
 
 pub struct SnarlView<'a> {
@@ -230,33 +230,22 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
         if is_preview {
             if let Value::Texture(handle) = value {
-                if let Some(tex_id) = handle.id() {
-                    if let Some(wgpu_tex) = self.engine.get_texture(handle) {
-                        let egui_tex = self.texture_cache.get_or_register(
-                            ui.ctx(),
-                            self.render_state,
-                            tex_id,
-                            wgpu_tex,
-                        );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(slot_def.name());
+                });
 
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(slot_def.name());
-                        });
-
-                        let aspect = handle.width() as f32 / handle.height() as f32;
-                        let max_width = 120.0;
-                        let size = Vec2::new(max_width, max_width / aspect);
-
-                        ui.add_space(4.0);
-                        ui.image(egui::ImageSource::Texture(egui::load::SizedTexture {
-                            id: egui_tex,
-                            size,
-                        }));
-
-                        return PinInfo::default()
-                            .with_side(PinSide::Right)
-                            .with_shape(pin_shape);
-                    }
+                if image_preview::show_texture_preview(
+                    ui,
+                    self.engine,
+                    self.texture_cache,
+                    self.render_state,
+                    handle,
+                    120.0,
+                ) {
+                    ui.add_space(4.0);
+                    return PinInfo::default()
+                        .with_side(PinSide::Right)
+                        .with_shape(pin_shape);
                 }
             }
         }

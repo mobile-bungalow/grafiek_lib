@@ -360,6 +360,8 @@ impl Node {
             .map(|s| s.default_value())
             .collect();
 
+        self.clear_dirty();
+
         Ok(())
     }
 

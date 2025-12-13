@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::registry::{SignatureRegistery, TextureMeta};
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Config, Inputs, Outputs};
-use crate::{ConfigSchema, EnumSchema, ExecutionContext, TextureHandle};
+use crate::{ConfigSchema, EnumSchema, ExecutionContext, SPECK, TextureHandle};
 
 #[derive(Copy, Clone)]
 pub struct Input {
@@ -59,6 +59,7 @@ impl Operation for Input {
             InputType::Texture => {
                 registry
                     .add_output::<TextureHandle>("value")
+                    .default(SPECK)
                     .meta(TextureMeta {
                         preview: true,
                         allow_file: true,

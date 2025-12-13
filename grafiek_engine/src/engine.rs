@@ -158,6 +158,7 @@ impl Engine {
 
         let record = self.graph[index].record().clone();
         self.emit(Mutation::CreateNode { idx: index, record });
+        self.emit(Event::GraphDirtied);
 
         Ok(index)
     }

@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::registry::{FloatRange, IntEnum, IntRange, SignatureRegistery};
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs, OutputsExt};
-use crate::{ExecutionContext, TextureMeta};
+use crate::{CHECK, ExecutionContext, SPECK, TextureMeta};
 
 #[derive(EnumSchema, Default, Clone)]
 pub enum TextureFormat {
@@ -84,7 +84,10 @@ fn register_input(name: &str, input: &InputType, registry: &mut SignatureRegiste
                 .build();
         }
         InputType::Image(_) => {
-            registry.add_input::<crate::TextureHandle>(name).build();
+            registry
+                .add_input::<crate::TextureHandle>(name)
+                .default(SPECK)
+                .build();
         }
         InputType::Point(_) | InputType::Color(_) | InputType::RawBytes(_) => {
             log::warn!("Unsupported input type! we will get around to it!")

@@ -60,14 +60,16 @@ impl GrafiekApp {
             })),
         })?;
 
-        Ok(Self {
+        let app = Self {
             engine,
             view_state: Default::default(),
             snarl: Default::default(),
             message_rx: rx,
             texture_cache: TextureCache::new(),
             render_state,
-        })
+        };
+
+        Ok(app)
     }
 
     pub fn needs_save(&self) -> bool {
@@ -197,7 +199,12 @@ impl eframe::App for GrafiekApp {
         self.show_close_prompt(ctx);
         self.handle_keypress(ctx);
 
-        let (menu_response, _actions) = MenuBar::show(ctx, &mut self.view_state);
+        let (menu_response, actions) = MenuBar::show(ctx, &mut self.view_state);
+
+        if actions.execute {
+            self.engine.execute();
+        }
+
         let top_panel_height = menu_response.response.rect.height() * 2.0;
 
         egui::Window::new("Log")

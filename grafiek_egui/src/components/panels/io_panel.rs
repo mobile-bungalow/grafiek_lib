@@ -80,7 +80,6 @@ pub fn show_io_panel(
                                     texture_cache,
                                     render_state,
                                     handle,
-                                    230.0,
                                 );
                             }
 
@@ -117,7 +116,6 @@ pub fn show_io_panel(
                                     texture_cache,
                                     render_state,
                                     handle,
-                                    230.0,
                                 );
                             }
                             Some((_, value)) => {

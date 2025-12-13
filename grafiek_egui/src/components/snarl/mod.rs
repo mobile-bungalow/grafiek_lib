@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use egui::{Pos2, Stroke};
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
-use grafiek_engine::{Engine, ExtendedMetadata, NodeIndex, TextureMeta, Value, ValueType};
+use grafiek_engine::{Engine, NodeIndex};
+
+use crate::components::engine_ext::EngineExt;
 
 pub use pin::{PinInfo, PinShape, PinSide};
 
@@ -13,7 +15,7 @@ pub mod style;
 pub use style::style;
 
 use crate::app::ViewState;
-use crate::components::value::image_preview::{self, TextureCache};
+use crate::components::value::image_preview::TextureCache;
 use crate::consts::colors::INSPECTED;
 
 pub struct SnarlView<'a> {
@@ -113,7 +115,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let Some(n) = self.engine.get_node(node.engine_node) else {
             return false;
         };
-        n.has_body_config()
+        n.has_body_config() || !self.engine.preview_textures(node.engine_node).is_empty()
     }
 
     fn show_body(
@@ -126,36 +128,27 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
     ) {
         let idx = snarl[node].engine_node;
 
-        let config_count = self
-            .engine
-            .get_node(idx)
-            .map(|n| n.config_count())
-            .unwrap_or(0);
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(0, 10))
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 10.0;
 
-        for slot_idx in 0..config_count {
-            let mut first = true;
-            ui.vertical(|ui| {
-                let _ = self
-                    .engine
-                    .edit_node_config(idx, slot_idx, |slot_def, value| {
+                    let _ = self.engine.edit_all_node_configs(idx, |slot_def, value| {
                         if !slot_def.on_node_body() {
                             return;
-                        }
-
-                        if first {
-                            ui.add_space(10.0);
-                            first = false;
                         }
 
                         ui.horizontal(|ui| {
                             ui.label(slot_def.name());
                             crate::components::value::value_editor(ui, slot_def, value);
                         });
-
-                        ui.add_space(10.0);
                     });
+
+                    self.engine
+                        .show_image_previews(ui, idx, self.texture_cache, self.render_state);
+                });
             });
-        }
     }
 
     fn show_input(
@@ -174,13 +167,11 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         let _ = self
             .engine
             .edit_node_input(idx, slot_idx, |slot_def, value| {
-                // Set pin shape based on type
-                pin_info =
-                    pin_info
-                        .clone()
-                        .with_shape(crate::components::value::pin_shape_for_type(
-                            slot_def.value_type(),
-                        ));
+                let value_type = slot_def.value_type();
+                pin_info = pin_info
+                    .clone()
+                    .with_shape(crate::components::value::pin_shape_for_type(value_type))
+                    .with_fill(crate::components::value::pin_color_for_type(value_type));
 
                 ui.horizontal(|ui| {
                     ui.label(slot_def.name());
@@ -212,45 +203,15 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             return PinInfo::default();
         };
 
-        let Some((slot_def, value)) = engine_node.outputs().nth(pin.id.output) else {
+        let Some((slot_def, _)) = engine_node.outputs().nth(pin.id.output) else {
             ui.label("out");
             return PinInfo::default();
         };
 
-        let pin_shape = crate::components::value::pin_shape_for_type(slot_def.value_type());
+        let value_type = slot_def.value_type();
+        let pin_shape = crate::components::value::pin_shape_for_type(value_type);
+        let pin_color = crate::components::value::pin_color_for_type(value_type);
 
-        // Check if this is a texture output with preview enabled and has a valid texture
-        let is_preview = matches!(
-            (slot_def.value_type(), slot_def.extended()),
-            (
-                ValueType::Texture,
-                ExtendedMetadata::Texture(TextureMeta { preview: true, .. })
-            )
-        );
-
-        if is_preview {
-            if let Value::Texture(handle) = value {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(slot_def.name());
-                });
-
-                if image_preview::show_texture_preview(
-                    ui,
-                    self.engine,
-                    self.texture_cache,
-                    self.render_state,
-                    handle,
-                    120.0,
-                ) {
-                    ui.add_space(4.0);
-                    return PinInfo::default()
-                        .with_side(PinSide::Right)
-                        .with_shape(pin_shape);
-                }
-            }
-        }
-
-        // Default: just show label
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.label(slot_def.name());
         });
@@ -258,6 +219,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
         PinInfo::default()
             .with_side(PinSide::Right)
             .with_shape(pin_shape)
+            .with_fill(pin_color)
     }
 
     fn has_graph_menu(&mut self, _pos: egui::Pos2, _snarl: &mut Snarl<NodeData>) -> bool {
@@ -315,7 +277,7 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
 
         ui.button("Copy").clicked();
 
-        if ui.button("Cut").clicked() {}
+        ui.button("Cut").clicked();
     }
 
     fn show_graph_menu(

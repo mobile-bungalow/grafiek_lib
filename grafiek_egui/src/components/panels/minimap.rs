@@ -8,6 +8,8 @@ use crate::components::snarl::NodeData;
 
 const MAP_PAD: f32 = 50.0;
 const NODE_SIZE: Vec2 = egui::vec2(150.0, 50.0);
+const MAP_SIZE: Vec2 = egui::vec2(160., 160.);
+const TOP_PANEL_H: f32 = 20.;
 
 //TODO: We should export the default operator library constants
 pub fn node_color(lib: &str) -> Color32 {
@@ -26,10 +28,10 @@ pub fn show_minimap(
 ) {
     egui::Window::new("Minimap")
         .fixed_pos(egui::pos2(
-            ctx.viewport_rect().width() - 160.0,
-            ctx.viewport_rect().height() - 160.0,
+            ctx.viewport_rect().width() - MAP_SIZE.x - 10.,
+            TOP_PANEL_H,
         ))
-        .fixed_size(egui::vec2(150.0, 150.0))
+        .fixed_size(MAP_SIZE)
         .collapsible(false)
         .resizable(false)
         .title_bar(false)

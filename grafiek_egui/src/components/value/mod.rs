@@ -1,16 +1,31 @@
 mod code_editor;
 pub mod image_preview;
 
-use egui::{Id, Response, Ui};
+use egui::{Color32, Id, Response, Ui};
 use grafiek_engine::{ExtendedMetadata, SlotDef, ValueMut, ValueType};
 
 use crate::components::snarl::{PinInfo, PinShape};
+use crate::consts::pins;
 
 /// Get the appropriate pin shape for a value type
 pub fn pin_shape_for_type(value_type: ValueType) -> PinShape {
     match value_type {
         ValueType::Texture | ValueType::Buffer => PinShape::Diamond,
+        ValueType::Any => PinShape::RoundedSquare,
         _ => PinShape::Circle,
+    }
+}
+
+/// Get the appropriate pin color for a value type
+pub fn pin_color_for_type(value_type: ValueType) -> Color32 {
+    match value_type {
+        ValueType::I32 => pins::I32,
+        ValueType::F32 => pins::F32,
+        ValueType::Bool => pins::BOOL,
+        ValueType::Texture => pins::TEXTURE,
+        ValueType::Buffer => pins::BUFFER,
+        ValueType::String => pins::STRING,
+        ValueType::Any => pins::ANY,
     }
 }
 

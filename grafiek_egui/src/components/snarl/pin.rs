@@ -6,6 +6,7 @@ pub enum PinShape {
     #[default]
     Circle,
     Diamond,
+    RoundedSquare,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -105,6 +106,12 @@ fn draw_pin(painter: &Painter, shape: PinShape, fill: Color32, stroke: Stroke, r
                 fill,
                 stroke: stroke.into(),
             }));
+        }
+        PinShape::RoundedSquare => {
+            let half = size * 0.4;
+            let rect = Rect::from_center_size(center, vec2(half * 2.0, half * 2.0));
+            let rounding = size * 0.15;
+            painter.rect(rect, rounding, fill, stroke, egui::StrokeKind::Middle);
         }
     }
 }

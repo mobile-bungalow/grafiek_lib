@@ -470,10 +470,10 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let was_dirty = node.is_dirty();
         let t = node.edit_config(slot, f)?;
 
-        if !was_dirty && node.is_dirty() {
+        // Config edits set needs_reconfigure flag; check and act on it
+        if node.needs_reconfigure() {
             self.emit(Event::GraphDirtied);
             self.reconfigure_node(index)?;
         }
@@ -491,11 +491,11 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let was_dirty = node.is_dirty();
         let res: Result<(), _> =
             (0..node.config_count()).try_for_each(|slot| node.edit_config(slot, &mut f));
 
-        if !was_dirty && node.is_dirty() {
+        // Config edits set needs_reconfigure flag; check and act on it
+        if node.needs_reconfigure() {
             self.emit(Event::GraphDirtied);
             self.reconfigure_node(index)?;
         }

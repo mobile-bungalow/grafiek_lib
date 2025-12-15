@@ -73,7 +73,8 @@ pub struct Node {
     /// these are None if there is no connected edge(s) to the corresponding slot
     incoming_input_values: Vec<Option<Value>>,
     operation: Box<dyn Operation>,
-    dirty: DirtyFlag,
+    needs_reconfigure: DirtyFlag,
+    needs_execute: DirtyFlag,
 }
 
 /// Result of probing whether a connection is valid.
@@ -101,7 +102,8 @@ impl Node {
             output_values: vec![],
             incoming_input_values: vec![],
             operation,
-            dirty: DirtyFlag::new(),
+            needs_reconfigure: DirtyFlag::new(),
+            needs_execute: DirtyFlag::new(),
         }
     }
 
@@ -129,24 +131,19 @@ impl Node {
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.dirty.get()
+        self.needs_reconfigure.get() || self.needs_execute.get()
     }
 
-    fn clear_dirty(&self) {
-        self.dirty.clear();
-    }
-
-    fn mark_dirty(&self) {
-        self.dirty.set();
+    pub fn needs_reconfigure(&self) -> bool {
+        self.needs_reconfigure.get()
     }
 
     pub fn set_dirty(&self) {
-        self.dirty.set();
+        self.needs_execute.set();
     }
 
-    /// Get a clone of the dirty flag for use in background tasks
     pub fn dirty_flag(&self) -> DirtyFlag {
-        self.dirty.clone()
+        self.needs_execute.clone()
     }
 
     /// Check if this node's output can connect to another node's input.
@@ -303,7 +300,7 @@ impl Node {
         let t = f(slot_def, slot_mut);
 
         if self.record.input_values[idx].changed_since(&checkpoint) {
-            self.mark_dirty();
+            self.needs_execute.set();
         }
 
         Ok(t)
@@ -324,7 +321,7 @@ impl Node {
         let t = f(slot_def, slot_mut);
 
         if self.output_values[idx].changed_since(&checkpoint) {
-            self.mark_dirty();
+            self.needs_execute.set();
         }
 
         Ok(t)
@@ -346,7 +343,8 @@ impl Node {
         let t = f(slot_def, slot_mut);
 
         if self.record.config_values[idx].changed_since(&checkpoint) {
-            self.mark_dirty();
+            self.needs_reconfigure.set();
+            self.needs_execute.set();
         }
 
         Ok(t)
@@ -371,7 +369,7 @@ impl Node {
             .map(|s| s.default_value())
             .collect();
 
-        self.clear_dirty();
+        self.needs_reconfigure.clear();
 
         Ok(())
     }
@@ -423,8 +421,7 @@ impl Node {
 
         self.operation.execute(ctx, inputs, outputs)?;
 
-        // Clear dirty flag after successful execution
-        self.clear_dirty();
+        self.needs_execute.clear();
 
         Ok(())
     }

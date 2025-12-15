@@ -13,7 +13,7 @@ use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
-    panels::{show_inspector_panel, show_io_panel, show_minimap},
+    panels::{BottomPanel, show_inspector_panel, show_io_panel, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
     value::image_preview::TextureCache,
 };
@@ -213,6 +213,12 @@ impl eframe::App for GrafiekApp {
                 egui_logger::logger_ui().show(ui);
             });
 
+        BottomPanel::show(
+            ctx,
+            &mut self.engine,
+            &mut self.view_state.show_inspect_node,
+        );
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let snarl_id = ui.make_persistent_id("snarl");
             self.view_state.snarl_ui.snarl_id = Some(snarl_id);
@@ -259,13 +265,6 @@ impl eframe::App for GrafiekApp {
                 &self.view_state.snarl_ui.viewport,
             );
         }
-
-        show_inspector_panel(
-            ctx,
-            &mut self.engine,
-            &mut self.view_state.show_inspect_node,
-            top_panel_height,
-        );
 
         self.view_state.notifications.show(ctx);
 

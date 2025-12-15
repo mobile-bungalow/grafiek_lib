@@ -53,7 +53,11 @@ pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
                 .range(range.min..=range.max)
                 .speed(range.step),
         ),
-        (ValueMut::F32(val), _) => ui.add(egui::DragValue::new(val).speed(0.1)),
+        (ValueMut::F32(val), _) => ui.add(
+            egui::DragValue::new(val)
+                .range(-10000.0..=10000.0)
+                .speed(0.1),
+        ),
 
         (ValueMut::I32(val), ExtendedMetadata::IntEnum(int_enum)) => {
             enum_selector(ui, val, &int_enum.options)

@@ -40,9 +40,7 @@ fn input_node_emits_dirty_on_edit() {
     .unwrap();
 
     let input = engine
-        .add_node(Box::new(Input {
-            value_type: InputType::Float,
-        }))
+        .add_node(Box::new(Input::new(InputType::Float)))
         .unwrap();
     messages.clear();
 
@@ -74,9 +72,7 @@ fn input_node_no_dirty_when_value_unchanged() {
     .unwrap();
 
     let input = engine
-        .add_node(Box::new(Input {
-            value_type: InputType::Float,
-        }))
+        .add_node(Box::new(Input::new(InputType::Float)))
         .unwrap();
     messages.clear();
 
@@ -109,9 +105,7 @@ fn connect_emits_dirty() {
     .unwrap();
 
     let input = engine
-        .add_node(Box::new(Input {
-            value_type: InputType::Float,
-        }))
+        .add_node(Box::new(Input::new(InputType::Float)))
         .unwrap();
 
     let add = engine

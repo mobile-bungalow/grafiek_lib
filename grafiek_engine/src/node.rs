@@ -140,6 +140,10 @@ impl Node {
         self.dirty.set();
     }
 
+    pub fn set_dirty(&self) {
+        self.dirty.set();
+    }
+
     /// Get a clone of the dirty flag for use in background tasks
     pub fn dirty_flag(&self) -> DirtyFlag {
         self.dirty.clone()
@@ -236,6 +240,13 @@ impl Node {
     pub fn operation<T: std::any::Any + 'static>(&self) -> Option<&T> {
         let op: &dyn std::any::Any = self.operation.as_ref();
         op.downcast_ref::<T>()
+    }
+
+    /// Downcast the operation to a concrete mutable type.
+    /// Returns None if the operation is not of type T.
+    pub fn operation_mut<T: std::any::Any + 'static>(&mut self) -> Option<&mut T> {
+        let op: &mut dyn std::any::Any = self.operation.as_mut();
+        op.downcast_mut::<T>()
     }
 }
 

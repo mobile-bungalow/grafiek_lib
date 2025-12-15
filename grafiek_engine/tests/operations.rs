@@ -12,9 +12,7 @@ fn init() {
 fn spawn_from_box() {
     let mut engine = common::engine();
     engine
-        .add_node(Box::new(Input {
-            value_type: InputType::Float,
-        }))
+        .add_node(Box::new(Input::new(InputType::Float)))
         .unwrap();
 }
 
@@ -27,9 +25,7 @@ fn spawn_from_path() {
 #[test]
 fn add_with_graph_inputs() {
     let mut engine = common::engine();
-    let inp = Input {
-        value_type: InputType::Float,
-    };
+    let inp = Input::new(InputType::Float);
     let input_a = engine.add_node(Box::new(inp.clone())).unwrap();
     let input_b = engine.add_node(Box::new(inp)).unwrap();
     let add = engine

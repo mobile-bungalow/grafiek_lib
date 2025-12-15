@@ -400,15 +400,16 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
-        let rec = node.record();
+        let slot_def = node.signature().output(0).ok_or(Error::NoPort(0))?.clone();
 
-        if !(rec.op_path.library == Input::LIBRARY && rec.op_path.operator == Input::OPERATOR) {
-            return Err(Error::NotInputNode);
-        }
+        let input_op: &mut Input = node.operation_mut().ok_or(Error::NotInputNode)?;
 
-        let t = node.edit_output(0, f)?;
+        let old_value = input_op.value().clone();
+        let t = f(&slot_def, input_op.value_mut().as_mut());
+        let changed = *input_op.value() != old_value;
 
-        if node.is_dirty() {
+        if changed {
+            self.graph[index].set_dirty();
             self.emit(Event::GraphDirtied);
         }
 
@@ -469,9 +470,10 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
+        let was_dirty = node.is_dirty();
         let t = node.edit_config(slot, f)?;
 
-        if node.is_dirty() {
+        if !was_dirty && node.is_dirty() {
             self.emit(Event::GraphDirtied);
             self.reconfigure_node(index)?;
         }
@@ -489,10 +491,11 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
+        let was_dirty = node.is_dirty();
         let res: Result<(), _> =
             (0..node.config_count()).try_for_each(|slot| node.edit_config(slot, &mut f));
 
-        if node.is_dirty() {
+        if !was_dirty && node.is_dirty() {
             self.emit(Event::GraphDirtied);
             self.reconfigure_node(index)?;
         }

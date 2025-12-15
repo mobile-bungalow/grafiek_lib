@@ -13,7 +13,7 @@ use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
-    panels::{BottomPanel, show_inspector_panel, show_io_panel, show_minimap},
+    panels::{BottomPanel, show_inspector_panel, show_io_panel, show_io_panel_next, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
     value::image_preview::TextureCache,
 };
@@ -22,6 +22,7 @@ use crate::components::{
 pub struct ViewState {
     pub show_logs: bool,
     pub show_io: bool,
+    pub show_bottom: bool,
     pub show_settings: bool,
     pub show_debug: bool,
     pub show_minimap: bool,
@@ -205,8 +206,6 @@ impl eframe::App for GrafiekApp {
             self.engine.execute();
         }
 
-        let top_panel_height = menu_response.response.rect.height() * 2.0;
-
         egui::Window::new("Log")
             .open(&mut self.view_state.show_logs)
             .show(ctx, |ui| {
@@ -217,6 +216,16 @@ impl eframe::App for GrafiekApp {
             ctx,
             &mut self.engine,
             &mut self.view_state.show_inspect_node,
+            &mut self.view_state.show_bottom,
+        );
+
+        show_io_panel_next(
+            ctx,
+            &mut self.engine,
+            &mut self.texture_cache,
+            &self.render_state,
+            &mut self.view_state.show_io,
+            20.0,
         );
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -247,15 +256,6 @@ impl eframe::App for GrafiekApp {
                 }
             }
         });
-
-        show_io_panel(
-            ctx,
-            &mut self.engine,
-            &mut self.texture_cache,
-            &self.render_state,
-            &mut self.view_state.show_io,
-            top_panel_height,
-        );
 
         if self.view_state.show_minimap {
             show_minimap(

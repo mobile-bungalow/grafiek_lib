@@ -29,10 +29,13 @@ impl From<Event> for Message {
 /// Informational events that don't affect undo/redo
 #[derive(Debug, Clone)]
 pub enum Event {
-    /// Graph validation produced errors
-    ErrorsChanged { errors: Vec<GraphError> },
-    /// Errors were cleared
-    ErrorsCleared,
+    /// A node has new errors
+    NodeErrorsChanged {
+        node: NodeIndex,
+        messages: Vec<String>,
+    },
+    /// A node's errors were cleared
+    NodeErrorsCleared { node: NodeIndex },
     /// Execution started
     ExecutionStarted,
     /// Execution completed
@@ -41,13 +44,6 @@ pub enum Event {
     NodeExecuted { node: NodeIndex },
     /// Graph was marked dirty (needs re-execution)
     GraphDirtied,
-}
-
-/// A graph validation or execution error
-#[derive(Debug, Clone)]
-pub struct GraphError {
-    pub node: Option<NodeIndex>,
-    pub message: String,
 }
 
 /// A mutation that can be applied to the graph, stored for undo/redo

@@ -4,6 +4,7 @@ mod pin;
 use std::sync::Arc;
 
 use egui::{Pos2, Stroke};
+use egui_phosphor::regular::WARNING;
 use egui_snarl::{InPin, OutPin, Snarl, ui::SnarlViewer};
 use grafiek_engine::{Engine, NodeIndex};
 
@@ -77,6 +78,57 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
             .get_node(idx)
             .map(|n| n.label().to_string())
             .unwrap_or_else(|| node.op_type.clone())
+    }
+
+    fn show_header(
+        &mut self,
+        node: egui_snarl::NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        ui: &mut egui::Ui,
+        snarl: &mut Snarl<NodeData>,
+    ) {
+        let Some(data) = snarl.get_node(node) else {
+            return;
+        };
+
+        let title = self.title(data);
+
+        ui.horizontal(|ui| {
+            ui.label(title);
+
+            let Some(errors) = self.engine.node_errors(data.engine_node) else {
+                return;
+            };
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let badge = egui::RichText::new(format!("{} {}", WARNING, errors.len()))
+                    .color(egui::Color32::from_rgb(255, 100, 100));
+
+                let response = ui.label(badge);
+                response.on_hover_ui(|ui| {
+                    for error in errors {
+                        if let Some(script_err) = error.as_script_error() {
+                            for loc_err in &script_err.errors {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{}:{}",
+                                            loc_err.line, loc_err.column
+                                        ))
+                                        .color(egui::Color32::LIGHT_GRAY)
+                                        .monospace(),
+                                    );
+                                    ui.label(&loc_err.message);
+                                });
+                            }
+                        } else {
+                            ui.label(error.to_string());
+                        }
+                    }
+                });
+            });
+        });
     }
 
     fn inputs(&mut self, node: &NodeData) -> usize {

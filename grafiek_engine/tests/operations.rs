@@ -1,6 +1,6 @@
 mod common;
 
-use grafiek_engine::ops::{ArithOp, Arithmetic, Input, InputType, Output};
+use grafiek_engine::ops::{ArithOp, Arithmetic, Input, Output};
 use grafiek_engine::{Value, ValueMut};
 
 #[test]
@@ -11,9 +11,7 @@ fn init() {
 #[test]
 fn spawn_from_box() {
     let mut engine = common::engine();
-    engine
-        .add_node(Box::new(Input::new(InputType::Float)))
-        .unwrap();
+    engine.add_node(Box::new(Input)).unwrap();
 }
 
 #[test]
@@ -25,9 +23,8 @@ fn spawn_from_path() {
 #[test]
 fn add_with_graph_inputs() {
     let mut engine = common::engine();
-    let inp = Input::new(InputType::Float);
-    let input_a = engine.add_node(Box::new(inp.clone())).unwrap();
-    let input_b = engine.add_node(Box::new(inp)).unwrap();
+    let input_a = engine.add_node(Box::new(Input)).unwrap();
+    let input_b = engine.add_node(Box::new(Input)).unwrap();
     let add = engine
         .add_node(Box::new(Arithmetic {
             operation: ArithOp::Add,
@@ -106,4 +103,24 @@ fn add_with_node_inputs() {
         Some((_, Value::F32(v))) => assert_eq!(*v, 7.0),
         _ => panic!("expected F32"),
     }
+}
+
+#[test]
+fn shader_error_captured() {
+    let mut engine = common::engine();
+
+    let grayscale = engine.instance_node("shader", "grayscale").unwrap();
+
+    assert!(engine.node_errors(grayscale).is_none());
+
+    let _ = engine.edit_node_config(grayscale, 5, |_, value| {
+        if let ValueMut::String(s) = value {
+            *s = "this is not valid glsl!".to_string();
+        }
+    });
+
+    assert!(engine.node_has_errors(grayscale));
+
+    let errors = engine.node_errors(grayscale).unwrap();
+    assert!(!errors.is_empty());
 }

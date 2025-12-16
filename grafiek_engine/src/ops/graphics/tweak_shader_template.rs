@@ -3,11 +3,11 @@ use std::any::Any;
 use parameter_schema_derive::{ConfigSchema, EnumSchema};
 use tweak_shader::{RenderContext, input_type::InputType};
 
-use crate::error::Result;
+use crate::error::{Error, Result, ScriptError};
 use crate::registry::{FloatRange, IntEnum, IntRange, SignatureRegistery};
 use crate::traits::{OpPath, Operation, OperationFactory};
 use crate::value::{Inputs, Outputs, OutputsExt};
-use crate::{CHECK, ExecutionContext, SPECK, TextureMeta};
+use crate::{ExecutionContext, SPECK, TextureMeta};
 
 #[derive(EnumSchema, Default, Clone)]
 pub enum TextureFormat {
@@ -190,7 +190,7 @@ impl<T: ShaderTemplate> Operation for T {
         self.set_match_input_dimensions(cfg.match_input_dimensions);
 
         let render_ctx = RenderContext::new(&cfg.source, format, &ctx.device, &ctx.queue)
-            .map_err(|e| crate::error::Error::Script(format!("Shader compile error: {e}")))?;
+            .map_err(|e| Error::Script(ScriptError::from_tweak_shader(e)))?;
 
         registry.clear_inputs();
         register_all_inputs(&render_ctx, registry);

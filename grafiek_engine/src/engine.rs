@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::execution_context::ExecutionState;
-use crate::gpu_pool::{GPUResourcePool, create_gpu_texture_empty};
+use crate::gpu_pool::GPUResourcePool;
 use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
 use crate::ops::{self, Input, Output};
@@ -369,13 +369,16 @@ impl Engine {
             .node_weight_mut(index)
             .ok_or(Error::NodeNotFound(format!("Node not found: {index:?}")))?;
 
+        // Verify this is an Input node
+        let _: &Input = node.operation().ok_or(Error::NotInputNode)?;
+
         let slot_def = node.signature().output(0).ok_or(Error::NoPort(0))?.clone();
+        let output_values = node.output_values_mut();
+        let output = output_values.get_mut(0).ok_or(Error::NoPort(0))?;
 
-        let input_op: &mut Input = node.operation_mut().ok_or(Error::NotInputNode)?;
-
-        let old_value = input_op.value().clone();
-        let t = f(&slot_def, input_op.value_mut().as_mut());
-        let changed = *input_op.value() != old_value;
+        let old_value = output.clone();
+        let t = f(&slot_def, output.as_mut());
+        let changed = *output != old_value;
 
         if changed {
             self.graph[index].set_dirty();
@@ -444,7 +447,10 @@ impl Engine {
         // Config edits set needs_reconfigure flag; check and act on it
         if node.needs_reconfigure() {
             self.emit(Event::GraphDirtied);
-            self.reconfigure_node(index)?;
+            self.clear_node_errors(index);
+            if let Err(e) = self.reconfigure_node(index) {
+                self.push_node_error(index, e);
+            }
         }
 
         Ok(t)
@@ -466,7 +472,10 @@ impl Engine {
         // Config edits set needs_reconfigure flag; check and act on it
         if node.needs_reconfigure() {
             self.emit(Event::GraphDirtied);
-            self.reconfigure_node(index)?;
+            self.clear_node_errors(index);
+            if let Err(e) = self.reconfigure_node(index) {
+                self.push_node_error(index, e);
+            }
         }
 
         res
@@ -533,18 +542,54 @@ impl Engine {
         self.ctx.timing()
     }
 
+    /// Get errors for a specific node, if any.
+    pub fn node_errors(&self, index: NodeIndex) -> Option<&[Error]> {
+        self.errors.get(&index).map(|v| v.as_slice())
+    }
+
+    /// Check if a node has any errors.
+    pub fn node_has_errors(&self, index: NodeIndex) -> bool {
+        self.errors.get(&index).map_or(false, |v| !v.is_empty())
+    }
+
+    /// Get all nodes with errors.
+    pub fn nodes_with_errors(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.errors.keys().copied()
+    }
+
+    /// Clear errors for a node and emit event if there were any.
+    fn clear_node_errors(&mut self, index: NodeIndex) {
+        if self.errors.remove(&index).is_some() {
+            self.emit(Event::NodeErrorsCleared { node: index });
+        }
+    }
+
+    /// Add an error for a node and emit event.
+    fn push_node_error(&mut self, index: NodeIndex, error: Error) {
+        let messages = vec![error.to_string()];
+        self.errors.entry(index).or_default().push(error);
+        self.emit(Event::NodeErrorsChanged {
+            node: index,
+            messages,
+        });
+    }
+
     /// Execute the graph in topological order.
     /// Each node's outputs are pushed to downstream nodes before they execute.
     pub fn execute(&mut self) {
         self.emit(Event::ExecutionStarted);
 
-        self.errors.clear();
+        // Clear all errors, emitting events for each
+        let nodes_with_errors: Vec<_> = self.errors.keys().copied().collect();
+        for node in nodes_with_errors {
+            self.clear_node_errors(node);
+        }
 
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {
             if let Err(e) = self.graph[node].execute(&mut self.ctx) {
                 log::error!("Node execution failed: {e}");
-                self.errors.entry(node).or_default().push(e);
+                self.push_node_error(node, e);
             }
 
             self.emit(Event::NodeExecuted { node });
@@ -710,7 +755,9 @@ impl Engine {
         let output = outputs.get_mut(slot).ok_or(Error::NoOutputSlot(slot))?;
 
         let Value::Texture(handle) = output else {
-            return Err(Error::Script("Output is not a texture".into()));
+            return Err(Error::Script(crate::error::ScriptError::new(
+                "Output is not a texture",
+            )));
         };
 
         if let Some(old_id) = handle.id {

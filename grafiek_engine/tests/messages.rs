@@ -120,7 +120,6 @@ fn connect_emits_dirty() {
 
     let msgs = messages.drain();
 
-    // Should have Connect mutation and GraphDirtied event
     assert!(
         msgs.iter()
             .any(|m| matches!(m, Message::Event(Event::GraphDirtied))),

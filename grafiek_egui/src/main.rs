@@ -46,8 +46,13 @@ fn main() -> Result<()> {
         "Grafiek",
         options,
         Box::new(|cc| {
+            let mut fonts = egui::FontDefinitions::default();
+            egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+            cc.egui_ctx.set_fonts(fonts);
+
             let render_state = cc.wgpu_render_state.clone().ok_or("WGPU uninitialized")?;
-            let app = GrafiekApp::init(Arc::new(render_state)).context("failed to initialize app")?;
+            let app =
+                GrafiekApp::init(Arc::new(render_state)).context("failed to initialize app")?;
             Ok(Box::new(app))
         }),
     )

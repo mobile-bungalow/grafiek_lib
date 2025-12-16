@@ -18,7 +18,7 @@ pub fn show_io_panel(
     }
 
     let panel_frame = egui::Frame::default()
-        .fill(ctx.style().visuals.window_fill.linear_multiply(0.5))
+        .fill(ctx.style().visuals.panel_fill)
         .stroke(ctx.style().visuals.window_stroke)
         .inner_margin(8.0)
         .outer_margin(0.0);
@@ -144,7 +144,7 @@ pub fn show_io_panel_next(
     }
 
     let panel_frame = egui::Frame::default()
-        .fill(ctx.style().visuals.window_fill.linear_multiply(0.5))
+        .fill(ctx.style().visuals.panel_fill)
         .stroke(ctx.style().visuals.window_stroke)
         .inner_margin(8.0)
         .outer_margin(0.0);

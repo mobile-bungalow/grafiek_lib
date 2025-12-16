@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::error::Error;
+use crate::execution_context::ExecutionState;
 use crate::gpu_pool::{GPUResourcePool, create_gpu_texture_empty};
 use crate::history::{Event, History, Message, Mutation};
 use crate::node::{ConnectionProbe, Node, NodeId};
@@ -8,43 +10,10 @@ use crate::ops::{self, Input, Output};
 use crate::registry::consts::{CHECK, CHECK_DATA, FLECK, SPECK, TRANSPARENT_SPECK};
 use crate::traits::{Operation, OperationFactory, OperationFactoryEntry};
 use crate::value::TextureHandle;
-use crate::{SlotDef, Value, ValueMut};
+use crate::{ExecutionContext, SlotDef, Value, ValueMut};
 use petgraph::prelude::*;
 use petgraph::visit::Topo;
 use wgpu::{Device, Queue, Texture};
-
-#[derive(Debug)]
-pub struct ExecutionContext {
-    pub device: Device,
-    pub queue: Queue,
-    textures: GPUResourcePool,
-}
-
-impl ExecutionContext {
-    pub fn texture(&self, handle: &TextureHandle) -> Option<&Texture> {
-        self.textures.get_texture(handle.id?)
-    }
-
-    /// Ensure the texture exists with the correct dimensions, replacing in-place if needed.
-    /// This is intended for render targets that are about to be overwritten anyways, it zeros them.
-    pub fn ensure_texture(&mut self, handle: &mut TextureHandle) {
-        match handle.id {
-            None => {
-                handle.id = self.textures.alloc_texture(&self.device, handle).into();
-            }
-            Some(id) => {
-                let needs_resize = self.textures.get_texture(id).map_or(false, |tex| {
-                    let size = tex.size();
-                    size.width != handle.width || size.height != handle.height
-                });
-                if needs_resize {
-                    let texture = create_gpu_texture_empty(&self.device, handle);
-                    handle.id = self.textures.replace_texture(id, texture).into();
-                }
-            }
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Edge {
@@ -65,6 +34,7 @@ pub struct EngineDescriptor {
 
 /// The main entry point into the library
 pub struct Engine {
+    start_time: Option<Instant>,
     errors: HashMap<NodeIndex, Vec<Error>>,
     // The underlying graph model
     graph: StableDiGraph<Node, Edge>,
@@ -98,11 +68,13 @@ impl Engine {
             ctx: ExecutionContext {
                 device: desc.device,
                 queue: desc.queue,
+                state: ExecutionState::default(),
                 textures,
             },
             on_message: desc.on_message,
             last_id: NodeId(0),
             errors: HashMap::default(),
+            start_time: None,
         };
 
         log::info!("loading grafiek::core operators");
@@ -559,6 +531,10 @@ impl Engine {
         self.emit(Event::ExecutionStarted);
 
         self.errors.clear();
+
+        self.ctx
+            .update_state(*self.start_time.get_or_insert(Instant::now()));
+
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {
             if let Err(e) = self.graph[node].execute(&mut self.ctx) {

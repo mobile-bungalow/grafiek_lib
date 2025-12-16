@@ -1,10 +1,11 @@
 use egui::{Context, RichText, ScrollArea, TextEdit};
 use grafiek_engine::{Engine, NodeIndex};
 
-const MIN_HEIGHT: f32 = 100.0;
+const MIN_HEIGHT: f32 = 150.0;
 const DEFAULT_HEIGHT: f32 = 200.0;
 const COLLAPSED_HEIGHT: f32 = 20.0;
 const MAX_HEIGHT: f32 = 500.0;
+const COLUMN_MIN_WIDTH: f32 = 200.0;
 
 #[derive(Default)]
 pub struct BottomPanel;
@@ -22,6 +23,7 @@ impl BottomPanel {
                 .exact_height(COLLAPSED_HEIGHT)
                 .show_separator_line(false)
                 .show(ctx, |ui| {
+                    ui.take_available_height();
                     ui.horizontal(|ui| {
                         Self::show_collapse_button(ui, collapsed, true);
                     });
@@ -34,20 +36,44 @@ impl BottomPanel {
                 .default_height(DEFAULT_HEIGHT)
                 .show_separator_line(true)
                 .show(ctx, |ui| {
+                    ui.take_available_height();
                     ui.horizontal(|ui| {
                         Self::show_collapse_button(ui, collapsed, false);
                     });
                     ui.allocate_space(egui::vec2(ui.available_width(), 0.0));
-                    Self::show_inspector(ui, engine, inspect_node);
+
+                    ui.columns(3, |columns| {
+                        Self::show_engine_info(&mut columns[0], engine);
+                        Self::show_center_panel(&mut columns[1]);
+                        Self::show_inspector(&mut columns[2], engine, inspect_node);
+                    });
                 });
         }
     }
 
     fn show_collapse_button(ui: &mut egui::Ui, collapsed: &mut bool, is_collapsed: bool) {
-        let icon = if is_collapsed { "^" } else { "v" };
-        if ui.button(icon).clicked() {
-            *collapsed = !*collapsed;
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let icon = if is_collapsed {
+                egui_phosphor::regular::CARET_UP
+            } else {
+                egui_phosphor::regular::CARET_DOWN
+            };
+            if ui.button(icon).clicked() {
+                *collapsed = !*collapsed;
+            }
+        });
+    }
+
+    fn show_engine_info(ui: &mut egui::Ui, _engine: &Engine) {
+        ui.centered_and_justified(|ui| {
+            ui.label(RichText::new("Engine").weak());
+        });
+    }
+
+    fn show_center_panel(ui: &mut egui::Ui) {
+        ui.centered_and_justified(|ui| {
+            ui.label(RichText::new("Tools").weak());
+        });
     }
 
     fn show_inspector(
@@ -70,23 +96,15 @@ impl BottomPanel {
         let old_label = node.label().to_string();
         let mut label = old_label.clone();
         let op_path = format!("{}/{}", node.op_path().library, node.op_path().operator);
-        let config_count = node.config_count();
-        let input_count = node.input_count();
-        let output_count = node.output_count();
+
+        ui.label(RichText::new("Inspector").strong());
+        ui.separator();
 
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Name").strong());
-            ui.add(TextEdit::singleline(&mut label).desired_width(200.0));
-            ui.separator();
-            ui.label(RichText::new(&op_path).weak());
-            ui.label(
-                RichText::new(format!(
-                    "inputs: {} | outputs: {} | configs: {}",
-                    input_count, output_count, config_count
-                ))
-                .weak(),
-            );
+            ui.label("Name");
+            ui.add(TextEdit::singleline(&mut label).desired_width(100.0));
         });
+        ui.label(RichText::new(&op_path).weak());
 
         if old_label != label {
             engine.set_label(engine_idx, &label);

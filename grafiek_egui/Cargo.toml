@@ -12,6 +12,7 @@ wgpu = { version = "27", default-features = false, features = ["metal", "vulkan"
 egui_logger = "0.9.0"
 egui-notify = "0.21.0"
 egui-snarl = { version = "0.9" , git = "https://github.com/mobile-bungalow/egui-snarl" }
+egui-phosphor = { version = "0.11", features = ["regular"] }
 egui_code_editor = "0.2"
 log = "0.4"
 env_logger = "0.11"

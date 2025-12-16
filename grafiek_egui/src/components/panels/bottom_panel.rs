@@ -1,6 +1,8 @@
 use egui::{Context, RichText, ScrollArea, TextEdit};
 use grafiek_engine::{Engine, NodeIndex};
 
+use crate::components::panels::engine_panel::show_engine_panel;
+
 const MIN_HEIGHT: f32 = 150.0;
 const DEFAULT_HEIGHT: f32 = 200.0;
 const COLLAPSED_HEIGHT: f32 = 20.0;
@@ -16,6 +18,7 @@ impl BottomPanel {
         engine: &mut Engine,
         inspect_node: &mut Option<NodeIndex>,
         collapsed: &mut bool,
+        play: &mut bool,
     ) {
         if *collapsed {
             egui::TopBottomPanel::bottom("bottom_panel")
@@ -43,7 +46,7 @@ impl BottomPanel {
                     ui.allocate_space(egui::vec2(ui.available_width(), 0.0));
 
                     ui.columns(3, |columns| {
-                        Self::show_engine_info(&mut columns[0], engine);
+                        show_engine_panel(&mut columns[0], ctx, engine, play);
                         Self::show_center_panel(&mut columns[1]);
                         Self::show_inspector(&mut columns[2], engine, inspect_node);
                     });

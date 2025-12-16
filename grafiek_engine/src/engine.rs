@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::time::Instant;
 
 use crate::error::Error;
 use crate::execution_context::ExecutionState;
@@ -34,7 +33,6 @@ pub struct EngineDescriptor {
 
 /// The main entry point into the library
 pub struct Engine {
-    start_time: Option<Instant>,
     errors: HashMap<NodeIndex, Vec<Error>>,
     // The underlying graph model
     graph: StableDiGraph<Node, Edge>,
@@ -74,7 +72,6 @@ impl Engine {
             on_message: desc.on_message,
             last_id: NodeId(0),
             errors: HashMap::default(),
-            start_time: None,
         };
 
         log::info!("loading grafiek::core operators");
@@ -525,15 +522,23 @@ impl Engine {
         })
     }
 
+    /// Set timing information for graph execution.
+    /// This is typically called by the application before execute().
+    pub fn set_timing(&mut self, timing: crate::TimeInfo) {
+        self.ctx.set_timing(timing);
+    }
+
+    /// Get timing information.
+    pub fn timing(&self) -> &crate::TimeInfo {
+        self.ctx.timing()
+    }
+
     /// Execute the graph in topological order.
     /// Each node's outputs are pushed to downstream nodes before they execute.
     pub fn execute(&mut self) {
         self.emit(Event::ExecutionStarted);
 
         self.errors.clear();
-
-        self.ctx
-            .update_state(*self.start_time.get_or_insert(Instant::now()));
 
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {

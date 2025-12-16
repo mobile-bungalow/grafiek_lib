@@ -30,6 +30,7 @@ pub struct ViewState {
     pub close_prompt: ClosePrompt,
     pub snarl_ui: SnarlState,
     pub notifications: Toasts,
+    pub playing: bool,
 }
 
 pub struct GrafiekApp {
@@ -217,6 +218,7 @@ impl eframe::App for GrafiekApp {
             &mut self.engine,
             &mut self.view_state.show_inspect_node,
             &mut self.view_state.show_bottom,
+            &mut self.view_state.playing,
         );
 
         show_io_panel_next(

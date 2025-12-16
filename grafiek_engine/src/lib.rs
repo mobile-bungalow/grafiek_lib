@@ -18,7 +18,7 @@ pub use node::Node;
 pub use registry::*;
 pub use value::*;
 
-pub use execution_context::ExecutionContext;
+pub use execution_context::{ExecutionContext, TimeInfo};
 pub use parameter_schema_derive::{ConfigSchema, EnumSchema, InputSchema, OutputSchema};
 pub use petgraph::graph::{EdgeIndex, NodeIndex};
 pub use traits::Schema;

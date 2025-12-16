@@ -1,4 +1,5 @@
 mod bottom_panel;
+mod engine_panel;
 mod inspect_node;
 mod io_panel;
 pub mod minimap;

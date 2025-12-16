@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use grafiek_engine::{
-    Engine, ExtendedMetadata, NodeIndex, TextureHandle, TextureMeta, Value, ValueType,
+    Engine, ExtendedMetadata, NodeIndex, StringKind, StringMeta, TextureHandle, TextureMeta, Value,
+    ValueType,
 };
 
 use super::value::image_preview::{self, TextureCache};
@@ -21,6 +22,9 @@ pub trait EngineExt {
         texture_cache: &mut TextureCache,
         render_state: &Arc<eframe::egui_wgpu::RenderState>,
     ) -> bool;
+
+    /// Returns true if the node has any script configs attached (Glsl or Rune).
+    fn has_script(&self, node: NodeIndex) -> bool;
 }
 
 impl EngineExt for Engine {
@@ -69,5 +73,21 @@ impl EngineExt for Engine {
             }
         }
         shown
+    }
+
+    fn has_script(&self, node: NodeIndex) -> bool {
+        let Some(engine_node) = self.get_node(node) else {
+            return false;
+        };
+
+        engine_node.configs().any(|(slot_def, _)| {
+            matches!(
+                slot_def.extended(),
+                ExtendedMetadata::String(StringMeta {
+                    kind: StringKind::Glsl | StringKind::Rune,
+                    ..
+                })
+            )
+        })
     }
 }

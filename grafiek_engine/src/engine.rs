@@ -605,7 +605,7 @@ impl Engine {
                     .output(edge.source_slot)
                     .map(|(_, v)| v.clone());
                 if let Some(value) = value {
-                    self.graph[dep].push_incoming(edge.sink_slot, value);
+                    self.graph[dep].push_incoming(edge.sink_slot, value, edge.source_slot);
                 }
             }
         }

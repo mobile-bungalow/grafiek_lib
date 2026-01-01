@@ -10,7 +10,6 @@ pub mod keybinds;
 pub mod logging;
 
 fn main() -> Result<()> {
-    // TODO: wgpu is really noisy on debug. We should filter it conditionally
     let _ = logging::init(log::LevelFilter::Debug).inspect_err(|e| eprintln!("{e:?}"));
 
     log::info!("Starting Grafiek Egui");

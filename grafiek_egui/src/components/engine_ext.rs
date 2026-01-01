@@ -3,6 +3,7 @@ use std::sync::Arc;
 use grafiek_engine::{
     Engine, ExtendedMetadata, NodeIndex, StringKind, StringMeta, TextureHandle, TextureMeta, Value,
     ValueType,
+    ops::{Input, Output},
 };
 
 use super::value::image_preview::{self, TextureCache};
@@ -25,6 +26,30 @@ pub trait EngineExt {
 
     /// Returns true if the node has any script configs attached (Glsl or Rune).
     fn has_script(&self, node: NodeIndex) -> bool;
+
+    /// Returns true if this is an Input node.
+    fn is_input_node(&self, node: NodeIndex) -> bool;
+
+    /// Returns true if this is an Output node.
+    fn is_output_node(&self, node: NodeIndex) -> bool;
+
+    /// Shows UI for an Input node's value (image picker or value editor).
+    fn show_input_node_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        node: NodeIndex,
+        texture_cache: &mut TextureCache,
+        render_state: &Arc<eframe::egui_wgpu::RenderState>,
+    );
+
+    /// Shows UI for an Output node's value preview.
+    fn show_output_node_body(
+        &self,
+        ui: &mut egui::Ui,
+        node: NodeIndex,
+        texture_cache: &mut TextureCache,
+        render_state: &Arc<eframe::egui_wgpu::RenderState>,
+    );
 }
 
 impl EngineExt for Engine {
@@ -89,5 +114,81 @@ impl EngineExt for Engine {
                 })
             )
         })
+    }
+
+    fn is_input_node(&self, node: NodeIndex) -> bool {
+        self.get_node(node)
+            .and_then(|n| n.operation::<Input>())
+            .is_some()
+    }
+
+    fn is_output_node(&self, node: NodeIndex) -> bool {
+        self.get_node(node)
+            .and_then(|n| n.operation::<Output>())
+            .is_some()
+    }
+
+    fn show_input_node_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        node: NodeIndex,
+        texture_cache: &mut TextureCache,
+        render_state: &Arc<eframe::egui_wgpu::RenderState>,
+    ) {
+        let Some(engine_node) = self.get_node(node) else {
+            return;
+        };
+
+        // Check if this input has a texture output with allow_file
+        let sig = engine_node.signature();
+        let texture_slot = (0..sig.output_count()).find(|&i| {
+            sig.output(i).is_some_and(|slot| {
+                matches!(
+                    (slot.value_type(), slot.extended()),
+                    (
+                        ValueType::Texture,
+                        ExtendedMetadata::Texture(TextureMeta {
+                            allow_file: true,
+                            ..
+                        })
+                    )
+                )
+            })
+        });
+
+        if let Some(slot) = texture_slot {
+            if let Some((_, Value::Texture(handle))) = engine_node.output(slot) {
+                image_preview::show_texture_preview(ui, self, texture_cache, render_state, handle);
+            }
+            if ui.button("Load Image...").clicked() {
+                crate::components::image_picker::pick_and_load_image(self, node, slot);
+            }
+        } else {
+            let _ = self.edit_graph_input(node, |slot_def, value| {
+                crate::components::value::value_editor(ui, slot_def, value);
+            });
+        }
+    }
+
+    fn show_output_node_body(
+        &self,
+        ui: &mut egui::Ui,
+        node: NodeIndex,
+        texture_cache: &mut TextureCache,
+        render_state: &Arc<eframe::egui_wgpu::RenderState>,
+    ) {
+        let Some(engine_node) = self.get_node(node) else {
+            return;
+        };
+
+        match engine_node.input(0) {
+            Some((_, Value::Texture(handle))) => {
+                image_preview::show_texture_preview(ui, self, texture_cache, render_state, handle);
+            }
+            Some((_, value)) => {
+                ui.label(format!("{}", value));
+            }
+            None => {}
+        }
     }
 }

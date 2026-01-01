@@ -405,7 +405,6 @@ impl InputsExt for Inputs<'_> {
     }
 }
 
-// TODO: Alotta traits dude
 pub trait OutputsExt {
     fn extract<T: ExtractMut>(&mut self, index: usize) -> Result<&mut T, ValueError>;
 }

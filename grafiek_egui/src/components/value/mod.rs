@@ -69,12 +69,11 @@ pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
 
         (ValueMut::Buffer(_), _) => ui.label(""),
 
-        (ValueMut::String(val), ExtendedMetadata::String(meta)) => {
-            code_editor::code_editor_field(ui, slot_id, val, &meta.kind)
+        (ValueMut::String(val), ExtendedMetadata::String(meta)) if meta.multi_line => {
+            ui.label(egui::RichText::new("Edit in code editor").italics().weak())
         }
-        (ValueMut::String(val), _) => {
-            code_editor::code_editor_field(ui, slot_id, val, &grafiek_engine::StringKind::Plain)
-        }
+
+        (ValueMut::String(val), _) => ui.text_edit_singleline(val),
 
         (ValueMut::Bool(val), _) => ui.checkbox(val, ""),
 

@@ -13,7 +13,7 @@ use grafiek_engine::{Engine, EngineDescriptor, NodeIndex};
 use crate::components::{
     close_prompt::ClosePrompt,
     menu_bar::MenuBar,
-    panels::{BottomPanel, show_inspector_panel, show_io_panel, show_io_panel_next, show_minimap},
+    panels::{BottomPanel, show_minimap},
     snarl::{self, NodeData, SnarlState, SnarlView},
     value::image_preview::TextureCache,
 };
@@ -21,7 +21,6 @@ use crate::components::{
 #[derive(Default)]
 pub struct ViewState {
     pub show_logs: bool,
-    pub show_io: bool,
     pub show_bottom: bool,
     pub show_settings: bool,
     pub show_debug: bool,
@@ -114,6 +113,9 @@ impl GrafiekApp {
         out
     }
 
+    /// The engine emits state change messages and we update the UI state here.
+    /// It's unfortunate but egui snarl isn't capable of slotting in an abstract
+    /// node store.
     fn handle_mutation(&mut self, mutation: Mutation) {
         match mutation {
             Mutation::CreateNode { idx, record } => {
@@ -218,16 +220,6 @@ impl eframe::App for GrafiekApp {
             &mut self.engine,
             &mut self.view_state.show_inspect_node,
             &mut self.view_state.show_bottom,
-            &mut self.view_state.playing,
-        );
-
-        show_io_panel_next(
-            ctx,
-            &mut self.engine,
-            &mut self.texture_cache,
-            &self.render_state,
-            &mut self.view_state.show_io,
-            20.0,
         );
 
         egui::CentralPanel::default().show(ctx, |ui| {

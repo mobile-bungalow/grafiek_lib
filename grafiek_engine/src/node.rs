@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use arrayvec::ArrayVec;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -66,12 +67,18 @@ impl DirtyFlag {
 }
 
 /// Runtime node state including operation instance
+/// An incoming value from an upstream node, with its source slot for error reporting.
+#[derive(Clone)]
+struct IncomingValue {
+    value: Value,
+    from_slot: usize,
+}
+
 pub struct Node {
     record: NodeRecord,
     signature: SignatureRegistery,
     output_values: Vec<Value>,
-    /// these are None if there is no connected edge(s) to the corresponding slot
-    incoming_input_values: Vec<Option<Value>>,
+    incoming_input_values: Vec<Option<IncomingValue>>,
     operation: Box<dyn Operation>,
     needs_reconfigure: DirtyFlag,
     needs_execute: DirtyFlag,
@@ -194,6 +201,7 @@ impl Node {
             .incoming_input_values
             .get(index)
             .and_then(|v| v.as_ref())
+            .map(|v| &v.value)
             .or_else(|| self.record.input_values.get(index))?;
         Some((def, value))
     }
@@ -382,9 +390,9 @@ impl Node {
 // Execution
 impl Node {
     /// Push an incoming value from an upstream node into this node's input slot.
-    pub(crate) fn push_incoming(&mut self, slot: usize, value: Value) {
+    pub(crate) fn push_incoming(&mut self, slot: usize, value: Value, from_slot: usize) {
         if let Some(incoming) = self.incoming_input_values.get_mut(slot) {
-            *incoming = Some(value);
+            *incoming = Some(IncomingValue { value, from_slot });
         }
     }
 
@@ -409,13 +417,26 @@ impl Node {
     /// Builds inputs from incoming values (or falls back to record values),
     /// then calls the operation's execute method.
     pub fn execute(&mut self, ctx: &mut ExecutionContext) -> crate::error::Result<()> {
-        // select the default from the record inputs if the incoming edges do not exist.
-        let inputs: Inputs = self
+        let inputs = self
             .incoming_input_values
             .iter()
             .zip(self.record.input_values.iter())
-            .map(|(incoming, record)| incoming.as_ref().unwrap_or(record).as_ref())
-            .collect();
+            .enumerate()
+            .map(|(to_slot, (incoming, record))| {
+                let Some(incoming) = incoming else {
+                    return Ok(record.clone());
+                };
+                incoming
+                    .value
+                    .cast(&record.discriminant())
+                    .ok_or(Error::IncompatibleTypes {
+                        from_slot: incoming.from_slot,
+                        to_slot,
+                    })
+            })
+            .collect::<crate::error::Result<ArrayVec<Value, 32>>>()?;
+
+        let inputs = inputs.iter().map(|i| i.as_ref()).collect();
 
         let outputs: Outputs = self.output_values.iter_mut().map(Value::as_mut).collect();
 

@@ -53,7 +53,6 @@ impl MenuBar {
                 });
 
                 ui.menu_button("View", |ui| {
-                    ui.checkbox(&mut view_state.show_io, "I/O Panel");
                     ui.checkbox(&mut view_state.show_debug, "Debug Info");
                     ui.checkbox(&mut view_state.show_logs, "Logs");
                     ui.checkbox(&mut view_state.show_minimap, "Minimap");

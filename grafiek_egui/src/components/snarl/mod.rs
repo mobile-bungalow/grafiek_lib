@@ -164,10 +164,13 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
     }
 
     fn has_body(&mut self, node: &NodeData) -> bool {
-        let Some(n) = self.engine.get_node(node.engine_node) else {
-            return false;
-        };
-        n.has_body_config() || !self.engine.preview_textures(node.engine_node).is_empty()
+        let idx = node.engine_node;
+        self.engine
+            .get_node(idx)
+            .is_some_and(|n| n.has_body_config())
+            || self.engine.is_input_node(idx)
+            || self.engine.is_output_node(idx)
+            || !self.engine.preview_textures(idx).is_empty()
     }
 
     fn show_body(
@@ -190,15 +193,34 @@ impl<'a> SnarlViewer<NodeData> for SnarlView<'a> {
                         if !slot_def.on_node_body() {
                             return;
                         }
-
                         ui.horizontal(|ui| {
                             ui.label(slot_def.name());
                             crate::components::value::value_editor(ui, slot_def, value);
                         });
                     });
 
-                    self.engine
-                        .show_image_previews(ui, idx, self.texture_cache, self.render_state);
+                    if self.engine.is_input_node(idx) {
+                        self.engine.show_input_node_body(
+                            ui,
+                            idx,
+                            self.texture_cache,
+                            self.render_state,
+                        );
+                    } else if self.engine.is_output_node(idx) {
+                        self.engine.show_output_node_body(
+                            ui,
+                            idx,
+                            self.texture_cache,
+                            self.render_state,
+                        );
+                    } else {
+                        self.engine.show_image_previews(
+                            ui,
+                            idx,
+                            self.texture_cache,
+                            self.render_state,
+                        );
+                    }
                 });
             });
     }

@@ -1,20 +1,26 @@
 name: CD
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  pull-requests: write
+
 jobs:
-  build:
+  build-web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: Swatinem/rust-cache@v2
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Install WASM toolchain
         run: rustup target add wasm32-unknown-unknown
@@ -22,19 +28,54 @@ jobs:
       - name: Install trunk
         run: cargo install trunk
 
-      - name: Build project
-        run: trunk build --release --verbose ./demo/index.html --dist ./demo/dist
+      - name: Build web demo
+        working-directory: grafiek_egui
+        run: trunk build --release --public-url /${{ github.event.repository.name }}/
 
-      - name: Deploy to Cloudflare Pages
-        id: deploy
-        uses: cloudflare/wrangler-action@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ./demo/dist --project-name=grafiek
+          path: grafiek_egui/dist
+
+  deploy-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-pr:
+    if: github.event_name == 'pull_request'
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: pr-preview
+
+      - name: Extract artifact
+        run: |
+          cd pr-preview
+          tar -xvf artifact.tar
+          rm artifact.tar
+
+      - name: Deploy PR preview
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: pr-preview
+          destination_dir: pr-${{ github.event.pull_request.number }}
 
       - name: Comment preview URL on PR
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -42,5 +83,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `Preview deployed to: ${{ steps.deploy.outputs.deployment-url }}`
+              body: `Preview deployed to: https://${context.repo.owner}.github.io/${context.repo.repo}/pr-${context.issue.number}/`
             })

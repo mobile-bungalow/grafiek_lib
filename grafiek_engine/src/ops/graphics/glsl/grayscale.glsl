@@ -1,11 +1,11 @@
 #version 450
 
 #pragma input(image, name=image)
-layout(set = 0, binding = 1) uniform sampler default_sampler;
-layout(set = 0, binding = 2) uniform texture2D image;
+layout(set = 0, binding = 0) uniform sampler default_sampler;
+layout(set = 0, binding = 1) uniform texture2D image;
 
 #pragma input(float, name="mix_amount", default=1.0, min=0.0, max=1.0)
-layout(set = 0, binding = 3) uniform Inputs {
+layout(set = 0, binding = 2) uniform Inputs {
     float mix_amount;
 };
 

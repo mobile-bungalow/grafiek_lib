@@ -129,6 +129,10 @@ impl BottomPanel {
         let has_pending_changes = pending_source != current_source;
 
         let script_errors = Self::collect_script_errors(engine, idx);
+        let lints: Vec<_> = script_errors
+            .iter()
+            .map(|(line, _, msg)| egui_code_editor::lint::Lint::error(*line as usize, msg.clone()))
+            .collect();
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -158,8 +162,7 @@ impl BottomPanel {
             if popup_open {
                 ui.label(RichText::new("Editing in detached window").weak().italics());
             } else {
-                let error_height = if script_errors.is_empty() { 0.0 } else { 60.0 };
-                let editor_height = ui.available_height() - error_height;
+                let editor_height = ui.available_height();
 
                 ScrollArea::both()
                     .id_salt("script_editor")
@@ -174,10 +177,10 @@ impl BottomPanel {
                             hot_reload,
                             &mut pending_source,
                             "inline",
+                            &lints,
                         );
                     });
 
-                Self::show_errors(ui, &script_errors);
                 ui.data_mut(|d| d.insert_temp(pending_source_id, pending_source.clone()));
             }
         });
@@ -212,11 +215,11 @@ impl BottomPanel {
                             hot_reload,
                             &mut pending_source,
                             "popup",
+                            &lints,
                         );
                     });
 
                     ui.data_mut(|d| d.insert_temp(pending_source_id, pending_source.clone()));
-                    Self::show_errors(ui, &script_errors);
                 });
             if !open {
                 ui.data_mut(|d| d.insert_temp(popup_id, false));
@@ -241,23 +244,6 @@ impl BottomPanel {
                 RichText::new(format!("{} error(s)", errors.len()))
                     .color(egui::Color32::from_rgb(255, 100, 100)),
             );
-        }
-    }
-
-    fn show_errors(ui: &mut egui::Ui, errors: &[(u32, u32, String)]) {
-        if errors.is_empty() {
-            return;
-        }
-        ui.separator();
-        for (line, col, msg) in errors {
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("{}:{}", line, col))
-                        .monospace()
-                        .color(egui::Color32::LIGHT_GRAY),
-                );
-                ui.label(RichText::new(msg).color(egui::Color32::from_rgb(255, 100, 100)));
-            });
         }
     }
 
@@ -303,6 +289,7 @@ impl BottomPanel {
         hot_reload: bool,
         pending_source: &mut String,
         id_suffix: &str,
+        lints: &[egui_code_editor::lint::Lint],
     ) {
         use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 
@@ -315,6 +302,7 @@ impl BottomPanel {
                         .with_syntax(Syntax::rust())
                         .with_theme(ColorTheme::GRUVBOX_DARK)
                         .with_numlines(true)
+                        .with_lints(lints.to_vec())
                         .show(ui, s);
                     *pending_source = s.clone();
                 }
@@ -325,6 +313,7 @@ impl BottomPanel {
                 .with_syntax(Syntax::rust())
                 .with_theme(ColorTheme::GRUVBOX_DARK)
                 .with_numlines(true)
+                .with_lints(lints.to_vec())
                 .show(ui, pending_source);
         }
     }

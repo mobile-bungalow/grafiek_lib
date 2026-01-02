@@ -199,6 +199,9 @@ impl GrafiekApp {
 
 impl eframe::App for GrafiekApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Process any pending image uploads from web file picker
+        crate::components::image_picker::process_pending_uploads(&mut self.engine);
+
         // Conditionally show close prompt on shutdown
         self.show_close_prompt(ctx);
         self.handle_keypress(ctx);

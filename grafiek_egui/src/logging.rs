@@ -1,5 +1,5 @@
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::Result;
-use env_logger::Builder;
 use log::Log;
 
 pub struct CombineLogger<L1, L2>(pub L1, pub L2);
@@ -20,8 +20,9 @@ impl<L1: Log, L2: Log> Log for CombineLogger<L1, L2> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn init(level: log::LevelFilter) -> Result<()> {
-    let env_log = Builder::from_default_env()
+    let env_log = env_logger::Builder::from_default_env()
         .filter_level(level)
         .filter_module("naga", log::LevelFilter::Warn)
         .filter_module("wgpu", log::LevelFilter::Warn)

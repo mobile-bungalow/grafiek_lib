@@ -4,7 +4,6 @@
 layout(set = 0, binding = 1) uniform sampler default_sampler;
 layout(set = 0, binding = 2) uniform texture2D image;
 
-// TODO: we need to make these a binding not PC if we want them to work on the web
 #pragma input(float, name="mix_amount", default=1.0, min=0.0, max=1.0)
 layout(set = 0, binding = 3) uniform Inputs {
     float mix_amount;

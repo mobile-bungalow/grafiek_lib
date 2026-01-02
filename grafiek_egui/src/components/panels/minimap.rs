@@ -11,7 +11,6 @@ const NODE_SIZE: Vec2 = egui::vec2(150.0, 50.0);
 const MAP_SIZE: Vec2 = egui::vec2(160., 160.);
 const TOP_PANEL_H: f32 = 20.;
 
-//TODO: We should export the default operator library constants
 pub fn node_color(lib: &str) -> Color32 {
     match lib {
         "core" => Color32::from_rgb(50, 88, 80),

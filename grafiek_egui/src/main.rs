@@ -9,6 +9,7 @@ pub mod consts;
 pub mod keybinds;
 pub mod logging;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<()> {
     let _ = logging::init(log::LevelFilter::Debug).inspect_err(|e| eprintln!("{e:?}"));
 

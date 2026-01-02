@@ -579,11 +579,9 @@ impl Engine {
     pub fn execute(&mut self) {
         self.emit(Event::ExecutionStarted);
 
-        // Clear all errors, emitting events for each
-        let nodes_with_errors: Vec<_> = self.errors.keys().copied().collect();
-        for node in nodes_with_errors {
-            self.clear_node_errors(node);
-        }
+        // Note: We no longer clear errors here - errors are cleared when
+        // a node is reconfigured (edit_node_config). This preserves compile
+        // errors across execute() calls.
 
         let mut topo = Topo::new(&self.graph);
         while let Some(node) = topo.next(&self.graph) {

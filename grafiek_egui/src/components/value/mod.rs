@@ -1,4 +1,3 @@
-mod code_editor;
 pub mod image_preview;
 
 use egui::{Color32, Id, Response, Ui};
@@ -44,9 +43,6 @@ pub fn value_editor_with_pin(
 }
 
 pub fn value_editor(ui: &mut Ui, slot: &SlotDef, value: ValueMut) -> Response {
-    // Create a stable ID for this slot
-    let slot_id = Id::new(("value_editor", slot.name()));
-
     match (value, slot.extended()) {
         (ValueMut::F32(val), ExtendedMetadata::FloatRange(range)) => ui.add(
             egui::DragValue::new(val)

@@ -87,7 +87,6 @@ impl BottomPanel {
     }
 
     fn show_scripts(ui: &mut egui::Ui, engine: &mut Engine, inspect_node: &mut Option<NodeIndex>) {
-        use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
         use grafiek_engine::{ExtendedMetadata, StringKind, StringMeta};
 
         let Some(idx) = *inspect_node else { return };
@@ -108,31 +107,49 @@ impl BottomPanel {
         };
 
         let popup_id = egui::Id::new(("script_popup", idx, slot_idx));
-        let popup_open = ui.data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
+        let hot_reload_id = egui::Id::new(("hot_reload", idx, slot_idx));
+        let pending_source_id = egui::Id::new(("pending_source", idx, slot_idx));
 
-        // Collect script errors for this node
-        let script_errors: Vec<_> = engine
-            .node_errors(idx)
-            .into_iter()
-            .flatten()
-            .filter_map(|e| e.as_script_error())
-            .flat_map(|se| se.errors.iter())
-            .map(|e| (e.line, e.column, e.message.clone()))
-            .collect();
+        let popup_open = ui.data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
+        let mut hot_reload = ui.data(|d| d.get_temp::<bool>(hot_reload_id).unwrap_or(true));
+
+        let current_source = engine
+            .get_node(idx)
+            .and_then(|n| n.configs().nth(slot_idx))
+            .and_then(|(_, v)| match v {
+                grafiek_engine::Value::String(s) => Some(s.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        let mut pending_source: String = ui
+            .data(|d| d.get_temp::<String>(pending_source_id))
+            .unwrap_or_else(|| current_source.clone());
+
+        let has_pending_changes = pending_source != current_source;
+
+        let script_errors = Self::collect_script_errors(engine, idx);
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(&name).strong());
-                if !script_errors.is_empty() {
-                    ui.label(
-                        RichText::new(format!("{} error(s)", script_errors.len()))
-                            .color(egui::Color32::from_rgb(255, 100, 100)),
-                    );
-                }
+                Self::show_error_count(ui, &script_errors);
+                ui.separator();
+                Self::show_compile_controls(
+                    ui,
+                    engine,
+                    idx,
+                    slot_idx,
+                    &mut hot_reload,
+                    hot_reload_id,
+                    has_pending_changes,
+                    &pending_source,
+                );
+                ui.separator();
                 if ui.small_button("Detach").clicked() {
                     ui.data_mut(|d| d.insert_temp(popup_id, true));
                 }
-                if ui.small_button("Open External").clicked() {
+                if ui.small_button("Open Externally").clicked() {
                     todo!("Open in external editor");
                 }
             });
@@ -141,40 +158,27 @@ impl BottomPanel {
             if popup_open {
                 ui.label(RichText::new("Editing in detached window").weak().italics());
             } else {
-                let available_height = ui.available_height();
+                let error_height = if script_errors.is_empty() { 0.0 } else { 60.0 };
+                let editor_height = ui.available_height() - error_height;
+
                 ScrollArea::both()
                     .id_salt("script_editor")
-                    .min_scrolled_height(available_height)
+                    .min_scrolled_height(editor_height)
+                    .max_height(editor_height)
                     .show(ui, |ui| {
-                        let _ = engine.edit_node_config(idx, slot_idx, |_, value| {
-                            if let grafiek_engine::ValueMut::String(s) = value {
-                                CodeEditor::default()
-                                    .id_source("script_code_editor")
-                                    .with_syntax(Syntax::rust())
-                                    .with_theme(ColorTheme::GRUVBOX_DARK)
-                                    .with_numlines(true)
-                                    .show(ui, s);
-                            }
-                        });
-
-                        if !script_errors.is_empty() {
-                            ui.add_space(8.0);
-                            ui.separator();
-                            for (line, col, msg) in &script_errors {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new(format!("{}:{}", line, col))
-                                            .monospace()
-                                            .color(egui::Color32::LIGHT_GRAY),
-                                    );
-                                    ui.label(
-                                        RichText::new(msg)
-                                            .color(egui::Color32::from_rgb(255, 100, 100)),
-                                    );
-                                });
-                            }
-                        }
+                        Self::show_code_editor(
+                            ui,
+                            engine,
+                            idx,
+                            slot_idx,
+                            hot_reload,
+                            &mut pending_source,
+                            "inline",
+                        );
                     });
+
+                Self::show_errors(ui, &script_errors);
+                ui.data_mut(|d| d.insert_temp(pending_source_id, pending_source.clone()));
             }
         });
 
@@ -186,22 +190,142 @@ impl BottomPanel {
                 .default_size([600.0, 400.0])
                 .resizable(true)
                 .show(ui.ctx(), |ui| {
-                    ScrollArea::both().show(ui, |ui| {
-                        let _ = engine.edit_node_config(idx, slot_idx, |_, value| {
-                            if let grafiek_engine::ValueMut::String(s) = value {
-                                CodeEditor::default()
-                                    .id_source("script_code_editor_popup")
-                                    .with_syntax(Syntax::rust())
-                                    .with_theme(ColorTheme::GRUVBOX_DARK)
-                                    .with_numlines(true)
-                                    .show(ui, s);
-                            }
-                        });
+                    ui.horizontal(|ui| {
+                        Self::show_compile_controls(
+                            ui,
+                            engine,
+                            idx,
+                            slot_idx,
+                            &mut hot_reload,
+                            hot_reload_id,
+                            has_pending_changes,
+                            &pending_source,
+                        );
                     });
+
+                    ScrollArea::both().show(ui, |ui| {
+                        Self::show_code_editor(
+                            ui,
+                            engine,
+                            idx,
+                            slot_idx,
+                            hot_reload,
+                            &mut pending_source,
+                            "popup",
+                        );
+                    });
+
+                    ui.data_mut(|d| d.insert_temp(pending_source_id, pending_source.clone()));
+                    Self::show_errors(ui, &script_errors);
                 });
             if !open {
                 ui.data_mut(|d| d.insert_temp(popup_id, false));
             }
+        }
+    }
+
+    fn collect_script_errors(engine: &Engine, idx: NodeIndex) -> Vec<(u32, u32, String)> {
+        engine
+            .node_errors(idx)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.as_script_error())
+            .flat_map(|se| se.errors.iter())
+            .map(|e| (e.line, e.column, e.message.clone()))
+            .collect()
+    }
+
+    fn show_error_count(ui: &mut egui::Ui, errors: &[(u32, u32, String)]) {
+        if !errors.is_empty() {
+            ui.label(
+                RichText::new(format!("{} error(s)", errors.len()))
+                    .color(egui::Color32::from_rgb(255, 100, 100)),
+            );
+        }
+    }
+
+    fn show_errors(ui: &mut egui::Ui, errors: &[(u32, u32, String)]) {
+        if errors.is_empty() {
+            return;
+        }
+        ui.separator();
+        for (line, col, msg) in errors {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!("{}:{}", line, col))
+                        .monospace()
+                        .color(egui::Color32::LIGHT_GRAY),
+                );
+                ui.label(RichText::new(msg).color(egui::Color32::from_rgb(255, 100, 100)));
+            });
+        }
+    }
+
+    fn show_compile_controls(
+        ui: &mut egui::Ui,
+        engine: &mut Engine,
+        idx: NodeIndex,
+        slot_idx: usize,
+        hot_reload: &mut bool,
+        hot_reload_id: egui::Id,
+        has_pending_changes: bool,
+        pending_source: &String,
+    ) {
+        if ui.checkbox(hot_reload, "Hot-reload").changed() {
+            ui.data_mut(|d| d.insert_temp(hot_reload_id, *hot_reload));
+            if *hot_reload && has_pending_changes {
+                Self::apply_source(engine, idx, slot_idx, pending_source);
+            }
+        }
+        let compile_text = if has_pending_changes {
+            "Compile*"
+        } else {
+            "Compile"
+        };
+        if ui.small_button(compile_text).clicked() && has_pending_changes {
+            Self::apply_source(engine, idx, slot_idx, pending_source);
+        }
+    }
+
+    fn apply_source(engine: &mut Engine, idx: NodeIndex, slot_idx: usize, source: &String) {
+        let _ = engine.edit_node_config(idx, slot_idx, |_, value| {
+            if let grafiek_engine::ValueMut::String(s) = value {
+                *s = source.clone();
+            }
+        });
+    }
+
+    fn show_code_editor(
+        ui: &mut egui::Ui,
+        engine: &mut Engine,
+        idx: NodeIndex,
+        slot_idx: usize,
+        hot_reload: bool,
+        pending_source: &mut String,
+        id_suffix: &str,
+    ) {
+        use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
+
+        let id = format!("script_code_editor_{}", id_suffix);
+        if hot_reload {
+            let _ = engine.edit_node_config(idx, slot_idx, |_, value| {
+                if let grafiek_engine::ValueMut::String(s) = value {
+                    CodeEditor::default()
+                        .id_source(&id)
+                        .with_syntax(Syntax::rust())
+                        .with_theme(ColorTheme::GRUVBOX_DARK)
+                        .with_numlines(true)
+                        .show(ui, s);
+                    *pending_source = s.clone();
+                }
+            });
+        } else {
+            CodeEditor::default()
+                .id_source(&id)
+                .with_syntax(Syntax::rust())
+                .with_theme(ColorTheme::GRUVBOX_DARK)
+                .with_numlines(true)
+                .show(ui, pending_source);
         }
     }
 
